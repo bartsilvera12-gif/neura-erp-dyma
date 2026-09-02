@@ -335,32 +335,64 @@ export async function saveCliente(datos: NuevoClienteData): Promise<Cliente | nu
   return rowToCliente(data as SupabaseRow);
 }
 
+/**
+ * Campos opcionales de la ficha que el usuario puede vaciar. Sin `| null` el
+ * formulario no tenía forma de borrarlos: mandaba `undefined`, el patch los
+ * omitía y el dato viejo quedaba pegado en la base.
+ */
+type CampoBorrable =
+  | "empresa"
+  | "ruc"
+  | "documento"
+  | "telefono"
+  | "telefono_secundario"
+  | "email"
+  | "email_secundario"
+  | "direccion"
+  | "ciudad"
+  | "pais"
+  | "sitio_web"
+  | "instagram"
+  | "linkedin"
+  | "valor_cliente"
+  | "condicion_pago"
+  | "vendedor_asignado";
+
 export type ActualizarClienteInput = Omit<
   Partial<Omit<Cliente, "id" | "codigo_cliente" | "created_at">>,
-  "tipo_servicio_cliente"
+  "tipo_servicio_cliente" | CampoBorrable
 > & {
   /** null quita el tipo. */
   tipo_servicio_cliente?: string | null;
+} & {
+  [K in CampoBorrable]?: Cliente[K] | null;
 };
+
+/** Texto opcional de ficha: vacío se guarda como null, no como cadena vacía. */
+function textoOpcional(v: unknown): string | null {
+  if (v == null) return null;
+  const t = String(v).trim();
+  return t === "" ? null : t;
+}
 
 /** Misma lógica que aplica el PATCH de API; centralizada para no desviar campos. */
 export function construirPatchActualizacionCliente(datos: ActualizarClienteInput): Record<string, unknown> {
   const patch: Record<string, unknown> = {};
   if (datos.tipo_cliente !== undefined) patch.tipo_cliente = datos.tipo_cliente;
-  if (datos.empresa !== undefined) patch.empresa = datos.empresa ?? null;
+  if (datos.empresa !== undefined) patch.empresa = textoOpcional(datos.empresa);
   if (datos.nombre_contacto !== undefined) {
     patch.nombre = datos.nombre_contacto ?? null;
     patch.nombre_contacto = datos.nombre_contacto ?? null;
   }
-  if (datos.ruc !== undefined) patch.ruc = datos.ruc ?? null;
-  if (datos.documento !== undefined) patch.documento = datos.documento ?? null;
-  if (datos.telefono !== undefined) patch.telefono = datos.telefono ?? null;
-  if (datos.telefono_secundario !== undefined) patch.telefono_secundario = datos.telefono_secundario ?? null;
-  if (datos.email !== undefined) patch.email = datos.email ?? null;
-  if (datos.email_secundario !== undefined) patch.email_secundario = datos.email_secundario ?? null;
-  if (datos.direccion !== undefined) patch.direccion = datos.direccion ?? null;
-  if (datos.ciudad !== undefined) patch.ciudad = datos.ciudad ?? null;
-  if (datos.pais !== undefined) patch.pais = datos.pais ?? null;
+  if (datos.ruc !== undefined) patch.ruc = textoOpcional(datos.ruc);
+  if (datos.documento !== undefined) patch.documento = textoOpcional(datos.documento);
+  if (datos.telefono !== undefined) patch.telefono = textoOpcional(datos.telefono);
+  if (datos.telefono_secundario !== undefined) patch.telefono_secundario = textoOpcional(datos.telefono_secundario);
+  if (datos.email !== undefined) patch.email = textoOpcional(datos.email);
+  if (datos.email_secundario !== undefined) patch.email_secundario = textoOpcional(datos.email_secundario);
+  if (datos.direccion !== undefined) patch.direccion = textoOpcional(datos.direccion);
+  if (datos.ciudad !== undefined) patch.ciudad = textoOpcional(datos.ciudad);
+  if (datos.pais !== undefined) patch.pais = textoOpcional(datos.pais);
   if (datos.sifen_receptor_extranjero !== undefined) {
     patch.sifen_receptor_extranjero = Boolean(datos.sifen_receptor_extranjero);
   }
@@ -428,13 +460,16 @@ export function construirPatchActualizacionCliente(datos: ActualizarClienteInput
           : String(datos.sifen_descripcion_tipo_doc).trim().slice(0, 41);
     }
   }
-  if (datos.sitio_web !== undefined) patch.sitio_web = datos.sitio_web ?? null;
-  if (datos.instagram !== undefined) patch.instagram = datos.instagram ?? null;
-  if (datos.linkedin !== undefined) patch.linkedin = datos.linkedin ?? null;
-  if (datos.valor_cliente !== undefined) patch.valor_cliente = datos.valor_cliente ?? null;
-  if (datos.condicion_pago !== undefined) patch.condicion_pago = datos.condicion_pago ?? null;
+  if (datos.sitio_web !== undefined) patch.sitio_web = textoOpcional(datos.sitio_web);
+  if (datos.instagram !== undefined) patch.instagram = textoOpcional(datos.instagram);
+  if (datos.linkedin !== undefined) patch.linkedin = textoOpcional(datos.linkedin);
+  if (datos.valor_cliente !== undefined) {
+    const v = Number(datos.valor_cliente);
+    patch.valor_cliente = datos.valor_cliente == null || !Number.isFinite(v) ? null : v;
+  }
+  if (datos.condicion_pago !== undefined) patch.condicion_pago = textoOpcional(datos.condicion_pago);
   if (datos.moneda_preferida !== undefined) patch.moneda_preferida = datos.moneda_preferida ?? null;
-  if (datos.vendedor_asignado !== undefined) patch.vendedor_asignado = datos.vendedor_asignado ?? null;
+  if (datos.vendedor_asignado !== undefined) patch.vendedor_asignado = textoOpcional(datos.vendedor_asignado);
   if (datos.vendedor_usuario_id !== undefined) {
     patch.vendedor_usuario_id =
       datos.vendedor_usuario_id === null || datos.vendedor_usuario_id === ""

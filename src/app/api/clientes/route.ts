@@ -202,6 +202,12 @@ export async function POST(request: NextRequest) {
       direccion,
       ciudad,
       pais,
+      sitio_web,
+      instagram,
+      linkedin,
+      valor_cliente,
+      origen,
+      prospecto_id,
       sifen_receptor_extranjero,
       sifen_codigo_pais,
       sifen_tipo_doc_receptor,
@@ -221,6 +227,8 @@ export async function POST(request: NextRequest) {
       vendedor_usuario_id,
       usa_nota_remision,
     } = body;
+
+    const ORIGENES = ["MANUAL", "CRM", "VENTA"];
 
     const uuidRe = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
     const planComercial =
@@ -247,6 +255,18 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    /** Valor estimado opcional: vacío o no numérico se guarda como null, no como 0. */
+    const valorCliente =
+      valor_cliente == null || String(valor_cliente).trim() === "" || !Number.isFinite(Number(valor_cliente))
+        ? null
+        : Number(valor_cliente);
+
+    /** Prospecto CRM de origen: sin esto, el cliente importado queda desconectado del embudo. */
+    const prospectoId =
+      prospecto_id == null || String(prospecto_id).trim() === "" || !Number.isFinite(Number(prospecto_id))
+        ? null
+        : Math.floor(Number(prospecto_id));
+
     const nombreCreador =
       (typeof auth.nombre === "string" ? auth.nombre.trim() : "") ||
       (typeof auth.user?.email === "string" ? auth.user.email.trim() : "") ||
@@ -270,6 +290,12 @@ export async function POST(request: NextRequest) {
       direccion:            direccion?.trim() || null,
       ciudad:               ciudad?.trim() || null,
       pais:                 pais?.trim() || null,
+      sitio_web:            sitio_web?.trim() || null,
+      instagram:            instagram?.trim() || null,
+      linkedin:             linkedin?.trim() || null,
+      valor_cliente:        valorCliente,
+      origen:               ORIGENES.includes(String(origen)) ? String(origen) : "MANUAL",
+      prospecto_id:         prospectoId,
       condicion_pago:       condicion_pago?.trim() || null,
       moneda_preferida:     moneda_preferida === "USD" ? "USD" : "GS",
       estado:               estado === "inactivo" ? "inactivo" : "activo",

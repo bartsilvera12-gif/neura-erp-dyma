@@ -85,6 +85,12 @@ export async function apiCreateCliente(data: {
   direccion?: string;
   ciudad?: string;
   pais?: string;
+  sitio_web?: string;
+  instagram?: string;
+  linkedin?: string;
+  valor_cliente?: number | null;
+  origen?: string;
+  prospecto_id?: string | number | null;
   condicion_pago?: string;
   moneda_preferida?: string;
   estado?: string;

@@ -317,6 +317,12 @@ function NuevoClienteForm() {
       direccion: form.direccion.trim() || undefined,
       ciudad: form.ciudad.trim().toUpperCase() || undefined,
       pais: form.pais.trim().toUpperCase() || undefined,
+      sitio_web: form.sitio_web.trim() || undefined,
+      instagram: form.instagram.trim() || undefined,
+      linkedin: form.linkedin.trim() || undefined,
+      valor_cliente: form.valor_cliente.trim() === "" ? null : Number(form.valor_cliente),
+      origen: form.origen,
+      prospecto_id: form.prospecto_id,
       condicion_pago: form.condicion_pago.trim().toUpperCase() || undefined,
       moneda_preferida: form.moneda_preferida,
       estado: form.estado,
@@ -608,6 +614,42 @@ function NuevoClienteForm() {
               </div>
             </div>
 
+            {/* Presencia digital: mismos campos que la ficha, para no perderlos en el alta. */}
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+              <div>
+                <label className={labelClass}>Sitio web</label>
+                <input
+                  type="text"
+                  name="sitio_web"
+                  value={form.sitio_web}
+                  onChange={handleChange}
+                  placeholder="https://"
+                  className={inputClass}
+                />
+              </div>
+              <div>
+                <label className={labelClass}>Instagram</label>
+                <input
+                  type="text"
+                  name="instagram"
+                  value={form.instagram}
+                  onChange={handleChange}
+                  placeholder="@usuario"
+                  className={inputClass}
+                />
+              </div>
+              <div>
+                <label className={labelClass}>LinkedIn</label>
+                <input
+                  type="text"
+                  name="linkedin"
+                  value={form.linkedin}
+                  onChange={handleChange}
+                  placeholder="URL o perfil"
+                  className={inputClass}
+                />
+              </div>
+            </div>
 
           </section>
 
