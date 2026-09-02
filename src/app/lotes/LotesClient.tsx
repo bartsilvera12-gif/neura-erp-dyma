@@ -6,6 +6,7 @@ import { Plus, RefreshCw, Settings2, Trash2, X } from "lucide-react";
 import { fetchWithSupabaseSession } from "@/lib/api/fetch-with-supabase-session";
 import { getClientes } from "@/lib/clientes/storage";
 import SmartSearchSelect, { type SmartOption } from "@/components/ui/SmartSearchSelect";
+import MontoInput from "@/components/ui/MontoInput";
 import type { Cliente } from "@/lib/clientes/types";
 import {
   ESTADOS_LOTE,
@@ -568,19 +569,19 @@ function PanelLote({
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className={labelClass}>Contado</label>
-                <input
-                  type="number"
+                <MontoInput
                   value={form.precio_contado}
-                  onChange={(e) => set("precio_contado", e.target.value)}
+                  onChange={(n) => set("precio_contado", String(n))}
+                  decimals={form.moneda === "USD"}
                   className={inputClass}
                 />
               </div>
               <div>
                 <label className={labelClass}>Financiado</label>
-                <input
-                  type="number"
+                <MontoInput
                   value={form.precio_financiado}
-                  onChange={(e) => set("precio_financiado", e.target.value)}
+                  onChange={(n) => set("precio_financiado", String(n))}
+                  decimals={form.moneda === "USD"}
                   className={inputClass}
                 />
               </div>
@@ -750,19 +751,19 @@ function ModalNuevoLote({
             </div>
             <div>
               <label className={labelClass}>Precio contado</label>
-              <input
-                type="number"
+              <MontoInput
                 value={contado}
-                onChange={(e) => setContado(e.target.value)}
+                onChange={(n) => setContado(String(n))}
+                decimals={moneda === "USD"}
                 className={inputClass}
               />
             </div>
             <div>
               <label className={labelClass}>Precio financiado</label>
-              <input
-                type="number"
+              <MontoInput
                 value={financiado}
-                onChange={(e) => setFinanciado(e.target.value)}
+                onChange={(n) => setFinanciado(String(n))}
+                decimals={moneda === "USD"}
                 className={inputClass}
               />
             </div>
