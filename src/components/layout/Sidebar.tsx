@@ -22,6 +22,7 @@ import {
   Banknote,
   TrendingUp,
   Brush,
+  Map as MapIcon,
 } from "lucide-react";
 import type { Session } from "@supabase/supabase-js";
 import { fetchWithSupabaseSession } from "@/lib/api/fetch-with-supabase-session";
@@ -76,6 +77,7 @@ function adminEmpresasMatchesQuery(queryRaw: string): boolean {
 const MENU_STRUCTURE: MenuItem[] = [
   { key: "dashboard", slug: "dashboard", label: "Dashboard", href: "/", icon: LayoutDashboard },
   { key: "gerencia", slug: "gerencia", label: "Gerencia", href: "/dashboard/gerencia", icon: TrendingUp },
+  { key: "lotes", slug: "lotes", label: "Lotes", href: "/lotes", icon: MapIcon },
   { key: "ventas", slug: "ventas", label: "Ventas", href: "/ventas", icon: ShoppingCart },
   { key: "gestion-clientes", slug: "gestion-clientes", label: "Gestión Clientes", href: "/gestion-clientes", icon: Users },
   { key: "clientes", slug: "clientes", label: "Clientes", href: "/clientes", icon: Users },
@@ -93,7 +95,7 @@ const MENU_STRUCTURE: MenuItem[] = [
  */
 const MENU_FAMILIES: { id: string; titulo: string; keys: string[] }[] = [
   { id: "inicio", titulo: "Inicio", keys: ["dashboard", "gerencia"] },
-  { id: "comercial", titulo: "Comercial", keys: ["ventas", "gestion-clientes", "clientes", "planes", "limpieza"] },
+  { id: "comercial", titulo: "Comercial", keys: ["lotes", "ventas", "gestion-clientes", "clientes", "planes", "limpieza"] },
   { id: "cobranzas", titulo: "Cobranzas", keys: ["pagos", "cobranzas"] },
   { id: "reportes", titulo: "Reportes", keys: ["reportes"] },
 ];

@@ -7,6 +7,7 @@
 const SIDEBAR_SLUG_HREF_ORDER: { slug: string; href: string }[] = [
   { slug: "dashboard", href: "/" },
   { slug: "gerencia", href: "/dashboard/gerencia" },
+  { slug: "lotes", href: "/lotes" },
   { slug: "ventas", href: "/ventas" },
   { slug: "gestion-clientes", href: "/gestion-clientes" },
   { slug: "clientes", href: "/clientes" },
@@ -125,6 +126,7 @@ export function pathRequiresModuleSlug(pathname: string): string | null {
   if (p.startsWith("/recepcion")) return "recepcion";
   if (p.startsWith("/recibos")) return "recibos";
   if (p.startsWith("/presupuestos")) return "presupuestos";
+  if (p.startsWith("/lotes")) return "lotes";
   if (p.startsWith("/ventas")) return "ventas";
   if (p.startsWith("/inventario")) return "inventario";
   if (p.startsWith("/clientes")) return "clientes";

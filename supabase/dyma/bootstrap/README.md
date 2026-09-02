@@ -12,6 +12,7 @@ idempotente: se puede repetir sin romper nada.
 | 4 | `04_usuario_admin.sql` | Usuario `admin@corporaciondyma.com` con rol `administrador`. Ver el paso previo en Supabase Auth documentado en el propio archivo. |
 | 5 | `05_exponer_schema_postgrest.sql` | Agrega `dymaerp` a `pgrst.db_schemas` del rol `authenticator` y recarga PostgREST. Sin esto la app no lee nada del schema. |
 | 6 | `06_modulo_limpieza.sql` | Módulo Limpieza: tabla `servicios_limpieza` (fecha, importe, cliente, factura asociada) y alta del módulo en el catálogo. |
+| 7 | `07_modulo_lotes.sql` | Módulo Lotes (fase 1): jerarquía `loteamientos` → `loteamiento_fracciones` → `loteamiento_manzanas` → `lotes`, con estados y precios. |
 
 El paso 5 es el que expone el schema en PostgREST; en este Supabase self-hosted eso
 no se maneja desde Studio sino desde el setting `pgrst.db_schemas` del rol `authenticator`.
@@ -32,7 +33,7 @@ el gate corre en modo estricto, así que lo que no esté activo ahí no aparece 
 sidebar ni es accesible por URL.
 
 Dashboard · Gerencia · Ventas · Gestión Clientes · Clientes · Pagos · Cobranzas ·
-Planes · Limpieza · Reportes
+Planes · Limpieza · Lotes · Reportes
 
 ### Limpieza
 
@@ -43,6 +44,21 @@ importe entra por sí solo a Cobranzas, Pagos, Estado de cuenta y Gerencia.
 
 Anular un servicio borra su factura solo si todavía no tiene cobros; si ya los tiene, la
 corrección va por el circuito de Facturas (anulación o nota de crédito).
+
+### Lotes
+
+Jerarquía del emprendimiento inmobiliario: **loteamiento → fracción → manzana → lote**.
+El nivel superior se llama `loteamientos` y no `proyectos` porque en este schema
+`proyectos` ya existe y es otra cosa (gestión de tareas y entregas).
+
+El lote guarda dimensiones, linderos, precio de contado y precio financiado, y un
+estado: **disponible · reservado · vendido · bloqueado**. La base obliga a que un lote
+reservado o vendido tenga titular, y que uno disponible no lo tenga. Por esa misma regla
+la FK a `clientes` es `ON DELETE RESTRICT`: no se puede borrar de verdad a un cliente con
+lotes asignados (la baja lógica del ERP sigue funcionando igual).
+
+Solo se puede eliminar un lote disponible, y solo se puede eliminar una manzana, fracción
+o loteamiento si no cuelga de ellos ningún lote reservado, vendido o bloqueado.
 
 ## Sobre `../provision/`
 
