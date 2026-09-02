@@ -7,6 +7,7 @@ import path from "node:path";
 import { PDFDocument, StandardFonts, rgb, type PDFImage, type PDFPage, type PDFFont, type RGB } from "pdf-lib";
 import QRCode from "qrcode";
 import type { KudeItemRow, KudeParsedFromXml } from "./parse-kude-from-signed-xml";
+import { leerLogoInstancia } from "@/lib/documentos/logo-instancia";
 
 /**
  * Branding opcional por empresa (KuDE/PDF únicamente).
@@ -116,11 +117,9 @@ function formatMonto(nStr: string, moneda: string): string {
  * se preserva el logo Neura del bundle.
  */
 function readLogoBytes(): Uint8Array | null {
-  const candidatos = [
-    path.join(process.cwd(), "public", "brand", "dyma-logo.jpeg"),
-    path.join(process.cwd(), "public", "logo-neura.png"),
-  ];
-  for (const p of candidatos) {
+  const propio = leerLogoInstancia();
+  if (propio) return propio.bytes;
+  for (const p of [path.join(process.cwd(), "public", "logo-neura.png")]) {
     try {
       if (fs.existsSync(p)) return new Uint8Array(fs.readFileSync(p));
     } catch {

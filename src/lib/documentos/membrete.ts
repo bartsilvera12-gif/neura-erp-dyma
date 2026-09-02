@@ -11,8 +11,8 @@ export const EMPRESA_DOC = {
   telefono: "",
   email: "",
   direccion: [] as string[],
-  /** Logo del cliente. Servido desde /public. */
-  logoUrl: "/brand/dyma-logo.jpeg",
+  /** Logo del cliente. Servido desde /public. Nombre canónico: PNG. */
+  logoUrl: "/brand/dyma-logo.png",
 };
 
 function esc(v: unknown): string {
