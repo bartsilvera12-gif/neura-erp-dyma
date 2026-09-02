@@ -16,7 +16,7 @@
 DO $$
 DECLARE
   v_empresa_id uuid := '06255def-3835-4d37-8f7f-801af8043e8c';
-  -- Los 9 módulos habilitados para DYMA. `empresa_modulos` es la única fuente de
+  -- Los 10 módulos habilitados para DYMA. `empresa_modulos` es la única fuente de
   -- verdad: con NEURA_INSTANCE_MODE=single_client el gate corre en modo estricto,
   -- así que lo que no esté acá no aparece en el sidebar ni es accesible por URL.
   v_slugs text[] := ARRAY[
@@ -28,7 +28,8 @@ DECLARE
     'pagos',            -- Pagos
     'cobranzas',        -- Cobranzas
     'planes',           -- Planes
-    'reportes'          -- Reportes
+    'reportes',         -- Reportes
+    'limpieza'          -- Limpieza (servicio de limpieza de lote)
   ];
 BEGIN
   -- ---------------------------------------------------------------------------
@@ -40,7 +41,7 @@ BEGIN
 
   -- ---------------------------------------------------------------------------
   -- 2) Catálogo de módulos. Se replica el catálogo heredado y se agregan
-  --    `gerencia` y `cobranzas`, que Instemaq no tenía.
+  --    `gerencia`, `cobranzas` y `limpieza`, que Instemaq no tenía.
   -- ---------------------------------------------------------------------------
   INSERT INTO dymaerp.modulos (id, nombre, slug, descripcion) VALUES
     ('f497bf2a-d650-460a-b5ab-f72018fed47b','Gastos','gastos',NULL),
@@ -76,7 +77,8 @@ BEGIN
     ('6fde0361-0ca7-4283-a645-579ff3cb9259','Remisión','remision',NULL),
     -- Módulos propios de DYMA (portados desde neura-erp-sistemas-propio).
     ('5f89f940-4cc1-4c8b-a808-538bcf06a6df','Gerencia','gerencia','Tablero gerencial comercial (read-only)'),
-    ('db159659-1286-4acd-97ad-f7e8322a66e9','Cobranzas','cobranzas','Seguimiento de cartera y promesas de pago')
+    ('db159659-1286-4acd-97ad-f7e8322a66e9','Cobranzas','cobranzas','Seguimiento de cartera y promesas de pago'),
+    ('5f444016-01d1-43e0-b626-c11f2eea202c','Limpieza','limpieza','Servicio de limpieza de lote, carga manual por cliente')
   ON CONFLICT (id) DO NOTHING;
 
   -- ---------------------------------------------------------------------------
@@ -90,7 +92,7 @@ BEGIN
   ON CONFLICT (id) DO NOTHING;
 
   -- ---------------------------------------------------------------------------
-  -- 4) empresa_modulos — deja EXACTAMENTE los 9 módulos pedidos, activos.
+  -- 4) empresa_modulos — deja EXACTAMENTE los 10 módulos pedidos, activos.
   --    Se reemplaza el set completo (mismo comportamiento que el guardado desde
   --    admin/empresas/[id]) para que correr de nuevo no acumule módulos viejos.
   -- ---------------------------------------------------------------------------

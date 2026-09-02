@@ -8,8 +8,9 @@ idempotente: se puede repetir sin romper nada.
 |---|---|---|
 | 1 | `01_schema_dymaerp.sql` | Crea el schema `dymaerp` como clon **exacto** del schema `instemaq`: 135 tablas, 630 constraints, 525 índices, 33 funciones, 62 triggers, 518 policies RLS y los mismos GRANTs. **Sin una sola fila de datos.** |
 | 2 | `02_modulos_gerencia_cobranzas.sql` | Objetos que Instemaq no tiene y los módulos nuevos necesitan: `plan_categoria`, `cobranza_promesas` y las 6 views `v_*` del tablero Gerencia. |
-| 3 | `03_datos_maestros_dyma.sql` | Empresa DYMA, catálogo de módulos (incluye `gerencia` y `cobranzas`), vistas de dashboard, etapas CRM, tipos de servicio y **los 9 módulos habilitados**. |
+| 3 | `03_datos_maestros_dyma.sql` | Empresa DYMA, catálogo de módulos (incluye `gerencia`, `cobranzas` y `limpieza`), vistas de dashboard, etapas CRM, tipos de servicio y **los 10 módulos habilitados**. |
 | 4 | `04_usuario_admin.sql` | Usuario `admin@corporaciondyma.com` con rol `administrador`. Ver el paso previo en Supabase Auth documentado en el propio archivo. |
+| 5 | `05_modulo_limpieza.sql` | Módulo Limpieza: tabla `servicios_limpieza` (fecha, importe, cliente, factura asociada) y alta del módulo en el catálogo. |
 
 Después de correrlos, exponer el schema en **Settings → API → Exposed schemas**
 agregando `dymaerp` (ese paso es manual, fuera de estos scripts).
@@ -30,7 +31,17 @@ el gate corre en modo estricto, así que lo que no esté activo ahí no aparece 
 sidebar ni es accesible por URL.
 
 Dashboard · Gerencia · Ventas · Gestión Clientes · Clientes · Pagos · Cobranzas ·
-Planes · Reportes
+Planes · Limpieza · Reportes
+
+### Limpieza
+
+Servicio que se presta sobre el lote de un cliente, típicamente terrenos sin construcción
+todavía. No se genera solo ni por calendario: lo carga el usuario a mano el día que el
+servicio se hizo, eligiendo cliente, fecha e importe. Cada alta emite una factura, así el
+importe entra por sí solo a Cobranzas, Pagos, Estado de cuenta y Gerencia.
+
+Anular un servicio borra su factura solo si todavía no tiene cobros; si ya los tiene, la
+corrección va por el circuito de Facturas (anulación o nota de crédito).
 
 ## Sobre `../provision/`
 
