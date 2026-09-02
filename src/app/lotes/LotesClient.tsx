@@ -2,11 +2,12 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { Plus, RefreshCw, Settings2, Trash2, X } from "lucide-react";
+import { FileText, Plus, RefreshCw, Settings2, Trash2, X } from "lucide-react";
 import { fetchWithSupabaseSession } from "@/lib/api/fetch-with-supabase-session";
 import { getClientes } from "@/lib/clientes/storage";
 import SmartSearchSelect, { type SmartOption } from "@/components/ui/SmartSearchSelect";
 import MontoInput from "@/components/ui/MontoInput";
+import ModalVenderLote from "./ModalVenderLote";
 import type { Cliente } from "@/lib/clientes/types";
 import {
   ESTADOS_LOTE,
@@ -50,6 +51,7 @@ export default function LotesClient() {
   const [toast, setToast] = useState<string | null>(null);
   const [seleccionado, setSeleccionado] = useState<Lote | null>(null);
   const [modalAlta, setModalAlta] = useState(false);
+  const [vendiendo, setVendiendo] = useState<Lote | null>(null);
 
   const showToast = useCallback((msg: string) => {
     setToast(msg);
@@ -155,6 +157,13 @@ export default function LotesClient() {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <Link
+            href="/lotes/ventas"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50"
+          >
+            <FileText className="h-3.5 w-3.5" />
+            Contratos
+          </Link>
           <Link
             href="/lotes/estructura"
             className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50"
@@ -324,6 +333,7 @@ export default function LotesClient() {
         <PanelLote
           lote={seleccionado}
           opcionesCliente={opcionesCliente}
+          onVender={(l) => { setSeleccionado(null); setVendiendo(l); }}
           onClose={() => setSeleccionado(null)}
           onSaved={async (msg) => {
             setSeleccionado(null);
@@ -340,6 +350,19 @@ export default function LotesClient() {
           onCancel={() => setModalAlta(false)}
           onSaved={async (msg) => {
             setModalAlta(false);
+            showToast(msg);
+            await load();
+          }}
+        />
+      ) : null}
+
+      {vendiendo ? (
+        <ModalVenderLote
+          lote={vendiendo}
+          opcionesCliente={opcionesCliente}
+          onCancel={() => setVendiendo(null)}
+          onVendido={async (msg) => {
+            setVendiendo(null);
             showToast(msg);
             await load();
           }}
@@ -373,11 +396,13 @@ function PanelLote({
   opcionesCliente,
   onClose,
   onSaved,
+  onVender,
 }: {
   lote: Lote;
   opcionesCliente: SmartOption[];
   onClose: () => void;
   onSaved: (msg: string) => void | Promise<void>;
+  onVender: (lote: Lote) => void;
 }) {
   const [form, setForm] = useState({
     numero: lote.numero,
@@ -468,6 +493,16 @@ function PanelLote({
         </div>
 
         <div className="mt-5 space-y-4">
+          {lote.estado === "disponible" || lote.estado === "reservado" ? (
+            <button
+              type="button"
+              onClick={() => onVender(lote)}
+              className="w-full rounded-xl bg-[#0EA5E9] px-3.5 py-2.5 text-xs font-semibold text-white hover:bg-[#0284C7]"
+            >
+              Vender con financiación
+            </button>
+          ) : null}
+
           <section>
             <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-slate-500">Estado comercial</p>
             <div className="grid gap-3">

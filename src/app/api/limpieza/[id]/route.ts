@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireLimpiezaModuleAccess } from "@/lib/limpieza/limpieza-auth";
-import { borrarFacturaLimpiezaSiNoTienePagos } from "@/lib/limpieza/limpieza-factura";
+import { borrarFacturaSiNoTienePagos } from "@/lib/facturacion/emitir-factura-simple";
 import { getFacturasServiceClientForEmpresa } from "@/lib/facturacion/facturas-service-client";
 import { errorResponse, successResponse } from "@/lib/api/response";
 
@@ -34,7 +34,7 @@ export async function DELETE(request: Request, ctx: { params: Promise<{ id: stri
 
     const facturaId = (servicio as { factura_id: string | null }).factura_id;
     if (facturaId) {
-      const borrada = await borrarFacturaLimpiezaSiNoTienePagos(sb, auth.empresaId, facturaId);
+      const borrada = await borrarFacturaSiNoTienePagos(sb, auth.empresaId, facturaId);
       if (!borrada) {
         return NextResponse.json(
           errorResponse(

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireLimpiezaModuleAccess } from "@/lib/limpieza/limpieza-auth";
-import { emitirFacturaLimpieza } from "@/lib/limpieza/limpieza-factura";
+import { emitirFacturaSimple } from "@/lib/facturacion/emitir-factura-simple";
 import { getFacturasServiceClientForEmpresa } from "@/lib/facturacion/facturas-service-client";
 import { errorResponse, successResponse } from "@/lib/api/response";
 import { emitEvent, EVENT_TYPES } from "@/lib/integrations/events";
@@ -187,7 +187,7 @@ export async function POST(request: Request) {
       ? `Servicio de limpieza — ${observacion}`
       : "Servicio de limpieza de lote";
 
-    const factura = await emitirFacturaLimpieza(sb, {
+    const factura = await emitirFacturaSimple(sb, {
       empresaId: auth.empresaId,
       clienteId,
       fecha,

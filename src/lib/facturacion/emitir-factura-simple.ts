@@ -3,24 +3,27 @@ import { fechaMasDiasCalendario } from "@/lib/fechas/calendario";
 import { montosFacturaItemParaInsert, tasaIvaDesdeIvaTipo } from "@/lib/facturacion/factura-item-montos";
 import { obtenerSiguienteNumeroFacturaEmpresa } from "@/lib/facturacion/factura-suscripcion-servidor";
 import type { AppSupabaseClient } from "@/lib/supabase/schema";
-import type { MonedaLimpieza, TipoFacturaLimpieza } from "@/lib/limpieza/types";
+export type MonedaFactura = "GS" | "USD";
+export type TipoFacturaSimple = "contado" | "credito";
 
 /**
- * Emisión de la factura que respalda un servicio de limpieza.
+ * Emite una factura puntual de una sola línea contra un cliente.
  *
- * Se repite acá la secuencia de `POST /api/facturas` (cabecera + ítem + rollback)
- * en vez de llamar a esa ruta por HTTP: así el alta del servicio y su factura
- * ocurren en el mismo request, con la misma sesión y el mismo cliente de schema.
+ * La usan los módulos que registran un hecho y lo facturan en el acto: el
+ * servicio de limpieza y el cobro de una cuota de lote. Se repite acá la
+ * secuencia de  (cabecera + ítem + rollback) en vez de
+ * llamar a esa ruta por HTTP, para que el hecho y su factura ocurran en el
+ * mismo request, con la misma sesión y el mismo cliente de schema.
  */
-export async function emitirFacturaLimpieza(
+export async function emitirFacturaSimple(
   supabase: AppSupabaseClient,
   input: {
     empresaId: string;
     clienteId: string;
     fecha: string; // YYYY-MM-DD
     importe: number;
-    moneda: MonedaLimpieza;
-    tipo: TipoFacturaLimpieza;
+    moneda: MonedaFactura;
+    tipo: TipoFacturaSimple;
     ivaTipo?: string;
     descripcion: string;
   }
@@ -94,7 +97,7 @@ export async function emitirFacturaLimpieza(
  * Solo procede si no tiene cobros registrados; si los tiene, devuelve `false` y
  * la factura queda intacta (hay que anularla desde el circuito de Facturas).
  */
-export async function borrarFacturaLimpiezaSiNoTienePagos(
+export async function borrarFacturaSiNoTienePagos(
   supabase: AppSupabaseClient,
   empresaId: string,
   facturaId: string

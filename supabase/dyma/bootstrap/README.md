@@ -13,6 +13,7 @@ idempotente: se puede repetir sin romper nada.
 | 5 | `05_exponer_schema_postgrest.sql` | Agrega `dymaerp` a `pgrst.db_schemas` del rol `authenticator` y recarga PostgREST. Sin esto la app no lee nada del schema. |
 | 6 | `06_modulo_limpieza.sql` | Módulo Limpieza: tabla `servicios_limpieza` (fecha, importe, cliente, factura asociada) y alta del módulo en el catálogo. |
 | 7 | `07_modulo_lotes.sql` | Módulo Lotes (fase 1): jerarquía `loteamientos` → `loteamiento_fracciones` → `loteamiento_manzanas` → `lotes`, con estados y precios. |
+| 8 | `08_ventas_y_cuotas.sql` | Venta financiada (fase 2): `lote_ventas` (contrato), `lote_venta_codeudores` y `lote_venta_cuotas` (plan de pago). |
 
 El paso 5 es el que expone el schema en PostgREST; en este Supabase self-hosted eso
 no se maneja desde Studio sino desde el setting `pgrst.db_schemas` del rol `authenticator`.
@@ -59,6 +60,25 @@ lotes asignados (la baja lógica del ERP sigue funcionando igual).
 
 Solo se puede eliminar un lote disponible, y solo se puede eliminar una manzana, fracción
 o loteamiento si no cuelga de ellos ningún lote reservado, vendido o bloqueado.
+
+### Financiamiento de lotes
+
+Reglas definidas por el cliente, congeladas en cada contrato para que un cambio
+de política no altere lo ya firmado:
+
+- Recargo del **15%** sobre el capital (contado − entrega inicial), repartido en
+  cuotas iguales. No se aplica sobre el precio de lista: lo que se paga al contado
+  el primer día no se está financiando.
+- Mora del **5% diario acumulativo** sobre el saldo impago de la cuota, desglosada
+  en 1,7% de gastos administrativos y 3,3% moratorios.
+- **5 días de gracia**: la mora corre desde el sexto día de atraso.
+
+La tasa de mora es alta a propósito —a 20 días de atraso la mora iguala a la
+cuota— y fue confirmada explícitamente por el cliente.
+
+Al cobrar una cuota se emite su propia factura, así el cobro entra solo a
+Cobranzas, Pagos y Estado de cuenta. La mora se cobra aparte y no reduce el
+saldo de capital.
 
 ## Sobre `../provision/`
 
