@@ -1,6 +1,6 @@
 "use client";
 
-import { FileText } from "lucide-react";
+import { FileText, Map as MapIcon, ReceiptText, TrendingUp } from "lucide-react";
 import { SettingsModuleCard } from "@/components/config/SettingsModuleCard";
 
 export default function ReportesPage() {
@@ -22,6 +22,36 @@ export default function ReportesPage() {
               description="Todas las facturas de la empresa: cliente, monto, saldo, estado y estado SIFEN, con filtros y acceso al detalle."
               icon={FileText}
               href="/reportes/facturas"
+              actionLabel="Ver reporte"
+            />
+          </li>
+          <li>
+            <SettingsModuleCard
+              title="Dashboard de ventas"
+              subtitle="LOTES · COMERCIAL"
+              description="Lotes vendidos contra disponibles por fracción, con avance, superficie y valorización de lista."
+              icon={MapIcon}
+              href="/reportes/lotes"
+              actionLabel="Ver reporte"
+            />
+          </li>
+          <li>
+            <SettingsModuleCard
+              title="Extracto de cuenta"
+              subtitle="CLIENTES · COBRANZAS"
+              description="Movimiento completo de un cliente: facturado, cobrado y saldo acumulado, listo para imprimir."
+              icon={ReceiptText}
+              href="/reportes/extracto"
+              actionLabel="Ver reporte"
+            />
+          </li>
+          <li>
+            <SettingsModuleCard
+              title="Flujo, proyección y mora"
+              subtitle="FINANZAS"
+              description="Flujo de caja mes a mes, proyección de cobros por vencimiento y listado de cartera en mora."
+              icon={TrendingUp}
+              href="/reportes/financiero"
               actionLabel="Ver reporte"
             />
           </li>
