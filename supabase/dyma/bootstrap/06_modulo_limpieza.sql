@@ -123,6 +123,10 @@ WHERE m.slug = 'limpieza'
 
 COMMIT;
 
+-- PostgREST cachea el esquema al arrancar: sin esto no ve las tablas recien
+-- creadas y responde 404 aunque existan. Recarga sin reiniciar el contenedor.
+NOTIFY pgrst, 'reload schema';
+
 -- Verificación: debe listar los 10 módulos activos, incluido `limpieza`.
 SELECT m.slug, m.nombre
 FROM dymaerp.empresa_modulos em

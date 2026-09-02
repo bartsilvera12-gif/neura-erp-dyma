@@ -45,6 +45,7 @@ export default function LotesClient() {
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [errorEstructura, setErrorEstructura] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [seleccionado, setSeleccionado] = useState<Lote | null>(null);
   const [modalAlta, setModalAlta] = useState(false);
@@ -55,16 +56,21 @@ export default function LotesClient() {
   }, []);
 
   // Estructura y clientes se cargan una vez; alimentan selectores y etiquetas.
+  // Si la estructura falla hay que decirlo: dejarla en null en silencio mostraba
+  // la pantalla vacía como si no hubiera nada cargado, escondiendo el error real.
   useEffect(() => {
-    fetchWithSupabaseSession("/api/lotes/estructura", { cache: "no-store" })
-      .then(async (r) => {
-        const j = (await r.json()) as { success?: boolean; data?: EstructuraPayload };
-        if (j.success && j.data) {
-          setEstructura(j.data);
-          if (j.data.loteamientos.length > 0) setLoteamientoId(j.data.loteamientos[0].id);
-        }
-      })
-      .catch(() => setEstructura(null));
+    (async () => {
+      try {
+        const r = await fetchWithSupabaseSession("/api/lotes/estructura", { cache: "no-store" });
+        const j = (await r.json()) as { success?: boolean; error?: string; data?: EstructuraPayload };
+        if (!r.ok || j.success !== true || !j.data) throw new Error(j.error ?? `Error ${r.status}`);
+        setEstructura(j.data);
+        if (j.data.loteamientos.length > 0) setLoteamientoId(j.data.loteamientos[0].id);
+      } catch (e) {
+        setEstructura(null);
+        setErrorEstructura(e instanceof Error ? e.message : "No se pudo cargar la estructura del loteamiento");
+      }
+    })();
     getClientes().then(setClientes).catch(() => setClientes([]));
   }, []);
 
@@ -177,7 +183,14 @@ export default function LotesClient() {
         </div>
       </div>
 
-      {sinEstructura ? (
+      {errorEstructura ? (
+        <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+          <p className="font-semibold">No se pudo cargar la estructura del loteamiento.</p>
+          <p className="mt-0.5 text-xs">{errorEstructura}</p>
+        </div>
+      ) : null}
+
+      {errorEstructura ? null : sinEstructura ? (
         <div className="rounded-2xl border border-slate-200 bg-white p-8 text-center">
           <p className="text-sm font-medium text-slate-700">Todavía no hay ningún loteamiento cargado.</p>
           <p className="mt-1 text-xs text-slate-500">

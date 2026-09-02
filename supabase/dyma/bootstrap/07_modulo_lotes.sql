@@ -261,6 +261,10 @@ WHERE m.slug = 'lotes'
 
 COMMIT;
 
+-- PostgREST cachea el esquema al arrancar: sin esto no ve las tablas recien
+-- creadas y responde 404 aunque existan. Recarga sin reiniciar el contenedor.
+NOTIFY pgrst, 'reload schema';
+
 -- Verificación: los módulos activos, ahora con `lotes`.
 SELECT m.slug, m.nombre
 FROM dymaerp.empresa_modulos em
