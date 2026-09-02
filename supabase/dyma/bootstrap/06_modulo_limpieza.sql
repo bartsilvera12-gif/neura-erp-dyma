@@ -1,7 +1,7 @@
 -- =============================================================================
 -- DYMA ERP — módulo Servicio de limpieza
 -- =============================================================================
--- Ejecutar DESPUÉS de 03_datos_maestros_dyma.sql (y de 04, en cualquier orden).
+-- Ejecutar DESPUÉS de 03_datos_maestros_dyma.sql (04 y 05 pueden ir en cualquier orden).
 --
 -- Servicio que se presta puntualmente sobre el lote de un cliente (típicamente
 -- terrenos sin construcción todavía). NO se genera automáticamente ni por

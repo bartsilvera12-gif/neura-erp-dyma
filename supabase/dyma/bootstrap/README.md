@@ -10,10 +10,11 @@ idempotente: se puede repetir sin romper nada.
 | 2 | `02_modulos_gerencia_cobranzas.sql` | Objetos que Instemaq no tiene y los módulos nuevos necesitan: `plan_categoria`, `cobranza_promesas` y las 6 views `v_*` del tablero Gerencia. |
 | 3 | `03_datos_maestros_dyma.sql` | Empresa DYMA, catálogo de módulos (incluye `gerencia`, `cobranzas` y `limpieza`), vistas de dashboard, etapas CRM, tipos de servicio y **los 10 módulos habilitados**. |
 | 4 | `04_usuario_admin.sql` | Usuario `admin@corporaciondyma.com` con rol `administrador`. Ver el paso previo en Supabase Auth documentado en el propio archivo. |
-| 5 | `05_modulo_limpieza.sql` | Módulo Limpieza: tabla `servicios_limpieza` (fecha, importe, cliente, factura asociada) y alta del módulo en el catálogo. |
+| 5 | `05_exponer_schema_postgrest.sql` | Agrega `dymaerp` a `pgrst.db_schemas` del rol `authenticator` y recarga PostgREST. Sin esto la app no lee nada del schema. |
+| 6 | `06_modulo_limpieza.sql` | Módulo Limpieza: tabla `servicios_limpieza` (fecha, importe, cliente, factura asociada) y alta del módulo en el catálogo. |
 
-Después de correrlos, exponer el schema en **Settings → API → Exposed schemas**
-agregando `dymaerp` (ese paso es manual, fuera de estos scripts).
+El paso 5 es el que expone el schema en PostgREST; en este Supabase self-hosted eso
+no se maneja desde Studio sino desde el setting `pgrst.db_schemas` del rol `authenticator`.
 
 ## Independencia
 
