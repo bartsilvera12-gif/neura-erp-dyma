@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { Plus, RefreshCw, Trash2, X } from "lucide-react";
+import { Pencil, Plus, RefreshCw, Trash2, X } from "lucide-react";
 import { fetchWithSupabaseSession } from "@/lib/api/fetch-with-supabase-session";
 import { getClientes } from "@/lib/clientes/storage";
 import SmartSearchSelect, { type SmartOption } from "@/components/ui/SmartSearchSelect";
@@ -73,6 +73,8 @@ export default function LimpiezaClient() {
   const [error, setError] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [modalAbierto, setModalAbierto] = useState(false);
+  /** Servicio que se está corrigiendo; null cuando el modal es un alta. */
+  const [editando, setEditando] = useState<ServicioLimpieza | null>(null);
   const [borrandoId, setBorrandoId] = useState<string | null>(null);
 
   const showToast = useCallback((msg: string) => {
@@ -294,6 +296,14 @@ export default function LimpiezaClient() {
                     <td className="px-4 py-3 text-right">
                       <button
                         type="button"
+                        onClick={() => setEditando(s)}
+                        title="Editar servicio"
+                        className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+                      >
+                        <Pencil className="h-4 w-4" />
+                      </button>
+                      <button
+                        type="button"
                         onClick={() => void eliminar(s)}
                         disabled={borrandoId === s.id}
                         title="Anular servicio"
@@ -310,12 +320,17 @@ export default function LimpiezaClient() {
         </div>
       </div>
 
-      {modalAbierto ? (
-        <ModalRegistrar
+      {modalAbierto || editando ? (
+        <ModalServicio
+          servicio={editando}
           opcionesCliente={opcionesCliente}
-          onCancel={() => setModalAbierto(false)}
+          onCancel={() => {
+            setModalAbierto(false);
+            setEditando(null);
+          }}
           onDone={async (msg) => {
             setModalAbierto(false);
+            setEditando(null);
             showToast(msg);
             await load();
           }}
@@ -353,21 +368,28 @@ function Tarjeta({
   );
 }
 
-function ModalRegistrar({
+/** Alta y corrección del servicio comparten formulario, para que no se desvíen entre sí. */
+function ModalServicio({
+  servicio,
   opcionesCliente,
   onCancel,
   onDone,
 }: {
+  servicio: ServicioLimpieza | null;
   opcionesCliente: SmartOption[];
   onCancel: () => void;
   onDone: (msg: string) => void | Promise<void>;
 }) {
-  const [clienteId, setClienteId] = useState("");
-  const [fecha, setFecha] = useState(hoyYmd());
-  const [importe, setImporte] = useState("");
-  const [moneda, setMoneda] = useState<MonedaLimpieza>("GS");
-  const [tipoFactura, setTipoFactura] = useState<TipoFacturaLimpieza>("contado");
-  const [observacion, setObservacion] = useState("");
+  const editar = servicio != null;
+  /** Con cobros imputados solo se puede retocar la observación; el resto queda congelado. */
+  const congelado = servicio?.factura_con_cobros === true;
+
+  const [clienteId, setClienteId] = useState(servicio?.cliente_id ?? "");
+  const [fecha, setFecha] = useState(servicio?.fecha_servicio ?? hoyYmd());
+  const [importe, setImporte] = useState(servicio ? String(servicio.importe) : "");
+  const [moneda, setMoneda] = useState<MonedaLimpieza>(servicio?.moneda ?? "GS");
+  const [tipoFactura, setTipoFactura] = useState<TipoFacturaLimpieza>(servicio?.factura_tipo ?? "contado");
+  const [observacion, setObservacion] = useState(servicio?.observacion ?? "");
   const [guardando, setGuardando] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
@@ -378,8 +400,9 @@ function ModalRegistrar({
     setErr(null);
     setGuardando(true);
     try {
-      const res = await fetchWithSupabaseSession("/api/limpieza", {
-        method: "POST",
+      const url = editar ? `/api/limpieza/${encodeURIComponent(servicio.id)}` : "/api/limpieza";
+      const res = await fetchWithSupabaseSession(url, {
+        method: editar ? "PATCH" : "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           cliente_id: clienteId,
@@ -396,13 +419,18 @@ function ModalRegistrar({
         data?: { factura_numero?: string };
       };
       if (!res.ok || json.success !== true) throw new Error(json.error ?? `Error ${res.status}`);
-      await onDone(
-        json.data?.factura_numero
-          ? `Servicio registrado. Factura ${json.data.factura_numero} emitida.`
-          : "Servicio registrado."
-      );
+      if (editar) {
+        await onDone("Servicio actualizado.");
+      } else {
+        await onDone(
+          json.data?.factura_numero
+            ? `Servicio registrado. Factura ${json.data.factura_numero} emitida.`
+            : "Servicio registrado."
+        );
+      }
     } catch (e) {
-      setErr(e instanceof Error ? e.message : "No se pudo registrar el servicio");
+      const fallback = editar ? "No se pudo actualizar el servicio" : "No se pudo registrar el servicio";
+      setErr(e instanceof Error ? e.message : fallback);
     } finally {
       setGuardando(false);
     }
@@ -416,9 +444,13 @@ function ModalRegistrar({
       >
         <div className="flex items-start justify-between gap-3">
           <div>
-            <h3 className="text-base font-semibold text-slate-900">Registrar servicio de limpieza</h3>
+            <h3 className="text-base font-semibold text-slate-900">
+              {editar ? "Editar servicio de limpieza" : "Registrar servicio de limpieza"}
+            </h3>
             <p className="mt-0.5 text-[11px] text-slate-500">
-              Se emite una factura al cliente, que pasa a Cobranzas y Estado de cuenta.
+              {editar
+                ? `Se corrige también la factura ${servicio.factura_numero ?? "asociada"}.`
+                : "Se emite una factura al cliente, que pasa a Cobranzas y Estado de cuenta."}
             </p>
           </div>
           <button type="button" onClick={onCancel} className="rounded-lg p-1 text-slate-400 hover:bg-slate-100">
@@ -426,20 +458,41 @@ function ModalRegistrar({
           </button>
         </div>
 
+        {congelado ? (
+          <p className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] text-amber-800">
+            La factura de este servicio ya tiene cobros: solo se puede corregir la observación. Para cambiar el
+            importe o el cliente, anulala o emití una nota de crédito desde Facturas.
+          </p>
+        ) : null}
+
         <div className="mt-4 grid gap-3">
           <div>
             <label className={labelClass}>Cliente</label>
-            <SmartSearchSelect
-              options={opcionesCliente}
-              value={clienteId}
-              onChange={setClienteId}
-              placeholder="Buscar cliente…"
-              required
-            />
+            {congelado ? (
+              <input
+                type="text"
+                value={servicio.cliente_label}
+                readOnly
+                className={`${inputClass} bg-slate-50 text-slate-500`}
+              />
+            ) : (
+              <SmartSearchSelect
+                options={opcionesCliente}
+                value={clienteId}
+                onChange={setClienteId}
+                placeholder="Buscar cliente…"
+                required
+              />
+            )}
           </div>
           <div>
             <label className={labelClass}>Fecha del servicio</label>
-            <FechaSelect value={fecha} onChange={(e) => setFecha(e.target.value)} className={inputClass} />
+            <FechaSelect
+              value={fecha}
+              onChange={(e) => setFecha(e.target.value)}
+              className={inputClass}
+              disabled={congelado}
+            />
           </div>
           <div className="grid grid-cols-3 gap-3">
             <div className="col-span-2">
@@ -451,6 +504,7 @@ function ModalRegistrar({
                 onChange={(e) => setImporte(e.target.value)}
                 placeholder="0"
                 className={inputClass}
+                disabled={congelado}
               />
             </div>
             <div>
@@ -459,6 +513,7 @@ function ModalRegistrar({
                 value={moneda}
                 onChange={(e) => setMoneda(e.target.value as MonedaLimpieza)}
                 className={inputClass}
+                disabled={congelado}
               >
                 <option value="GS">Gs.</option>
                 <option value="USD">USD</option>
@@ -471,6 +526,7 @@ function ModalRegistrar({
               value={tipoFactura}
               onChange={(e) => setTipoFactura(e.target.value as TipoFacturaLimpieza)}
               className={inputClass}
+              disabled={congelado}
             >
               <option value="contado">Contado — vence el mismo día</option>
               <option value="credito">Crédito — vence según el plazo de la instancia</option>
@@ -508,7 +564,7 @@ function ModalRegistrar({
             disabled={guardando || invalido}
             className="rounded-xl bg-[#0EA5E9] px-3.5 py-2 text-xs font-semibold text-white hover:bg-[#0284C7] disabled:opacity-50"
           >
-            {guardando ? "Registrando…" : "Registrar y facturar"}
+            {guardando ? "Guardando…" : editar ? "Guardar cambios" : "Registrar y facturar"}
           </button>
         </div>
       </div>

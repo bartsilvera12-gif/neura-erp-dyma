@@ -92,6 +92,92 @@ export async function emitirFacturaSimple(
   };
 }
 
+/** ¿La factura ya recibió algún cobro? Con cobros, su importe no se puede reescribir. */
+export async function facturaTieneCobros(
+  supabase: AppSupabaseClient,
+  empresaId: string,
+  facturaId: string
+): Promise<boolean> {
+  const { data, error } = await supabase
+    .from("pagos")
+    .select("id")
+    .eq("empresa_id", empresaId)
+    .eq("factura_id", facturaId)
+    .limit(1);
+  if (error) throw new Error(error.message);
+  return (data ?? []).length > 0;
+}
+
+/**
+ * Reescribe la factura de una línea que emitió `emitirFacturaSimple`, cuando se
+ * corrige el hecho que la originó.
+ *
+ * Solo para facturas sin cobros: el saldo se reescribe entero, así que un pago
+ * previo quedaría colgado. Quien llama debe verificarlo con `facturaTieneCobros`.
+ * El número de factura no se toca — es la identidad del documento.
+ */
+export async function actualizarFacturaSimple(
+  supabase: AppSupabaseClient,
+  input: {
+    empresaId: string;
+    facturaId: string;
+    clienteId: string;
+    fecha: string; // YYYY-MM-DD
+    importe: number;
+    moneda: MonedaFactura;
+    tipo: TipoFacturaSimple;
+    ivaTipo?: string;
+    descripcion: string;
+  }
+): Promise<{ fecha_vencimiento: string }> {
+  let fechaVenc = input.fecha;
+  if (input.tipo === "credito") {
+    const dias = Number(process.env.FACTURA_DIAS_CREDITO_DEFAULT ?? 30);
+    fechaVenc = fechaMasDiasCalendario(input.fecha, Number.isFinite(dias) ? dias : 30);
+  }
+
+  const { error: errFac } = await supabase
+    .from("facturas")
+    .update({
+      cliente_id: input.clienteId,
+      fecha: input.fecha,
+      fecha_vencimiento: fechaVenc,
+      monto: input.importe,
+      saldo: input.importe,
+      estado: "Pendiente",
+      tipo: input.tipo,
+      moneda: input.moneda,
+    })
+    .eq("id", input.facturaId)
+    .eq("empresa_id", input.empresaId);
+  if (errFac) throw new Error(`No se pudo actualizar la factura: ${errFac.message}`);
+
+  const linea = montosFacturaItemParaInsert({
+    totalLinea: input.importe,
+    moneda: input.moneda,
+    cantidad: 1,
+    precioUnitario: input.importe,
+    tasaIva: tasaIvaDesdeIvaTipo(input.ivaTipo),
+  });
+
+  // La factura simple tiene una sola línea: se reescribe en bloque.
+  const { error: errItem } = await supabase
+    .from("factura_items")
+    .update({
+      descripcion: input.descripcion,
+      cantidad: 1,
+      precio_unitario: linea.precio_unitario,
+      subtotal: linea.subtotal,
+      iva: linea.iva,
+      total: linea.total,
+    })
+    .eq("factura_id", input.facturaId)
+    .eq("empresa_id", input.empresaId);
+  if (errItem) throw new Error(`No se pudo actualizar el detalle de la factura: ${errItem.message}`);
+
+  return { fecha_vencimiento: fechaVenc };
+}
+
 /**
  * Borra la factura de un servicio que se está anulando.
  * Solo procede si no tiene cobros registrados; si los tiene, devuelve `false` y

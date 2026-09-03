@@ -76,21 +76,33 @@ export async function GET(request: Request) {
       }
     }
 
-    const facturas: Record<string, { numero: string | null; estado: string | null; saldo: number | null }> = {};
+    const facturas: Record<
+      string,
+      { numero: string | null; estado: string | null; saldo: number | null; tipo: string | null }
+    > = {};
+    // Facturas con cobro imputado: esas ya no se pueden reescribir al editar el servicio.
+    const conCobros = new Set<string>();
     if (facturaIds.length > 0) {
-      const { data: facs } = await sb
-        .from("facturas")
-        .select("id, numero_factura, estado, saldo")
-        .eq("empresa_id", auth.empresaId)
-        .in("id", facturaIds);
-      for (const f of (facs ?? []) as Record<string, unknown>[]) {
+      const [facsRes, pagosRes] = await Promise.all([
+        sb
+          .from("facturas")
+          .select("id, numero_factura, estado, saldo, tipo")
+          .eq("empresa_id", auth.empresaId)
+          .in("id", facturaIds),
+        sb.from("pagos").select("factura_id").eq("empresa_id", auth.empresaId).in("factura_id", facturaIds),
+      ]);
+      for (const f of (facsRes.data ?? []) as Record<string, unknown>[]) {
         const id = String(f.id ?? "");
         if (!id) continue;
         facturas[id] = {
           numero: (f.numero_factura as string) ?? null,
           estado: (f.estado as string) ?? null,
           saldo: f.saldo == null ? null : Number(f.saldo),
+          tipo: (f.tipo as string) ?? null,
         };
+      }
+      for (const p of (pagosRes.data ?? []) as { factura_id: string | null }[]) {
+        if (p.factura_id) conCobros.add(p.factura_id);
       }
     }
 
@@ -108,6 +120,8 @@ export async function GET(request: Request) {
         factura_numero: fac?.numero ?? null,
         factura_estado: fac?.estado ?? null,
         factura_saldo: fac?.saldo ?? null,
+        factura_tipo: fac?.tipo === "credito" ? "credito" : fac ? "contado" : null,
+        factura_con_cobros: f.factura_id ? conCobros.has(f.factura_id) : false,
         creado_por_email: f.creado_por_email,
         created_at: f.created_at,
       };

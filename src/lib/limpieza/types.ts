@@ -18,6 +18,10 @@ export interface ServicioLimpieza {
   /** Estado de la factura asociada; `null` si la factura ya no existe. */
   factura_estado: string | null;
   factura_saldo: number | null;
+  /** Condición de la factura ("contado" | "credito"), para poder reeditarla. */
+  factura_tipo: TipoFacturaLimpieza | null;
+  /** La factura ya recibió cobros: el importe y el cliente quedan congelados. */
+  factura_con_cobros: boolean;
   creado_por_email: string | null;
   created_at: string;
 }
