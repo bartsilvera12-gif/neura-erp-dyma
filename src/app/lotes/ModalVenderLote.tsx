@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { X } from "lucide-react";
 import { fetchWithSupabaseSession } from "@/lib/api/fetch-with-supabase-session";
 import SmartSearchSelect, { type SmartOption } from "@/components/ui/SmartSearchSelect";
@@ -14,6 +14,7 @@ import {
   RECARGO_FINANCIACION,
 } from "@/lib/financiacion/plan-cuotas";
 import type { Lote } from "@/lib/lotes/types";
+import type { Vendedor } from "@/lib/vendedores/types";
 
 const inputClass =
   "w-full border border-slate-200 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-[#0EA5E9] focus:outline-none bg-white text-sm";
@@ -67,8 +68,28 @@ export default function ModalVenderLote({
   const [entrega, setEntrega] = useState("0");
   const [cuotas, setCuotas] = useState("12");
   const [observacion, setObservacion] = useState("");
+  const [vendedorId, setVendedorId] = useState("");
+  /** En porcentaje, como lo escribe el vendedor ("3"); la API lo pasa a fracción. */
+  const [comision, setComision] = useState("0");
+  const [vendedores, setVendedores] = useState<Vendedor[]>([]);
   const [guardando, setGuardando] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetchWithSupabaseSession("/api/lotes/vendedores", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((j: { success?: boolean; data?: { vendedores: Vendedor[] } }) => {
+        setVendedores(j.success === true && j.data ? j.data.vendedores : []);
+      })
+      .catch(() => setVendedores([]));
+  }, []);
+
+  /** Al elegir vendedor se propone SU comisión; queda editable para esta venta. */
+  function elegirVendedor(id: string) {
+    setVendedorId(id);
+    const v = vendedores.find((x) => x.id === id);
+    setComision(v ? String(Math.round(v.comision_pct * 1e6) / 1e4) : "0");
+  }
 
   const moneda = lote.moneda;
 
@@ -108,6 +129,8 @@ export default function ModalVenderLote({
           entrega_inicial: Number(entrega),
           cantidad_cuotas: Number(cuotas),
           observacion,
+          vendedor_id: vendedorId || null,
+          comision_pct: vendedorId ? comision : 0,
         }),
       });
       const json = (await res.json()) as {
@@ -168,6 +191,36 @@ export default function ModalVenderLote({
               onChange={setCodeudorId}
               placeholder="Sin codeudor"
             />
+          </div>
+          <div>
+            <label className={labelClass}>
+              Vendedor <span className="font-normal text-slate-400">(opcional)</span>
+            </label>
+            <select value={vendedorId} onChange={(e) => elegirVendedor(e.target.value)} className={inputClass}>
+              <option value="">Sin vendedor</option>
+              {vendedores.map((v) => (
+                <option key={v.id} value={v.id}>
+                  {v.codigo} — {v.nombre}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className={labelClass}>Comisión del vendedor (%)</label>
+            <input
+              type="number"
+              min={0}
+              max={100}
+              step="0.01"
+              value={comision}
+              onChange={(e) => setComision(e.target.value)}
+              onFocus={(e) => e.currentTarget.select()}
+              disabled={!vendedorId}
+              className={`${inputClass} disabled:bg-slate-50 disabled:text-slate-400`}
+            />
+            <p className="mt-1 text-[10px] text-slate-400">
+              Se liquida sobre cada cuota cobrada, no al firmar.
+            </p>
           </div>
           <div>
             <label className={labelClass}>Fecha de la venta</label>

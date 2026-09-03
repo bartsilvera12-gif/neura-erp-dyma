@@ -10,6 +10,7 @@ import {
   RECARGO_FINANCIACION,
 } from "@/lib/financiacion/plan-cuotas";
 import { hoyAsuncion } from "@/lib/reportes/calculo";
+import { pctDesdeFormulario } from "@/lib/vendedores/calculo-comision";
 import type { AppSupabaseClient } from "@/lib/supabase/schema";
 import type { EstadoVenta, VentaResumen } from "@/lib/financiacion/types";
 
@@ -156,7 +157,19 @@ export async function POST(request: Request) {
     ? [...new Set(body.codeudores.filter((c): c is string => typeof c === "string" && !!c.trim()))]
     : [];
   const observacion = typeof body.observacion === "string" ? body.observacion.trim() : "";
+  const vendedorId = typeof body.vendedor_id === "string" && body.vendedor_id.trim() ? body.vendedor_id.trim() : null;
+  // El % se congela acá: renegociar con el vendedor no reescribe contratos firmados.
+  const comisionPct = pctDesdeFormulario(body.comision_pct == null ? 0 : (body.comision_pct as string | number));
 
+  if (comisionPct == null) {
+    return NextResponse.json(errorResponse("La comisión debe estar entre 0 y 100%"), { status: 400 });
+  }
+  if (!vendedorId && comisionPct > 0) {
+    return NextResponse.json(
+      errorResponse("Para cargar una comisión hay que elegir el vendedor de la venta."),
+      { status: 400 }
+    );
+  }
   if (!loteId) return NextResponse.json(errorResponse("Falta el lote"), { status: 400 });
   if (!clienteId) return NextResponse.json(errorResponse("Falta el cliente titular"), { status: 400 });
   if (!FECHA_RE.test(fechaVenta)) return NextResponse.json(errorResponse("Fecha de venta inválida"), { status: 400 });
@@ -233,6 +246,8 @@ export async function POST(request: Request) {
         mora_moratoria_pct: MORA_MORATORIA_DIARIA,
         estado: "vigente",
         observacion: observacion || null,
+        vendedor_id: vendedorId,
+        comision_pct: comisionPct,
         created_by: usuarioCatalogId,
       })
       .select()

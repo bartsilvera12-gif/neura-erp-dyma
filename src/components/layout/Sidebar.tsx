@@ -77,7 +77,20 @@ function adminEmpresasMatchesQuery(queryRaw: string): boolean {
 const MENU_STRUCTURE: MenuItem[] = [
   { key: "dashboard", slug: "dashboard", label: "Dashboard", href: "/", icon: LayoutDashboard },
   { key: "gerencia", slug: "gerencia", label: "Gerencia", href: "/dashboard/gerencia", icon: TrendingUp },
-  { key: "lotes", slug: "lotes", label: "Lotes", href: "/lotes", icon: MapIcon },
+  {
+    key: "lotes",
+    slug: "lotes",
+    label: "Lotes",
+    href: "/lotes",
+    icon: MapIcon,
+    children: [
+      { label: "Mapa de lotes", href: "/lotes", exactMatch: true },
+      { label: "Contratos", href: "/lotes/ventas" },
+      { label: "Comisiones", href: "/lotes/comisiones" },
+      { label: "Vendedores", href: "/lotes/vendedores" },
+      { label: "Estructura", href: "/lotes/estructura" },
+    ],
+  },
   { key: "ventas", slug: "ventas", label: "Ventas", href: "/ventas", icon: ShoppingCart },
   { key: "gestion-clientes", slug: "gestion-clientes", label: "Gestión Clientes", href: "/gestion-clientes", icon: Users },
   { key: "clientes", slug: "clientes", label: "Clientes", href: "/clientes", icon: Users },
