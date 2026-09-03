@@ -128,6 +128,15 @@ export default function ProductPickerModal({
   // entera; si no, manda la unidad base del producto (KG/METRO → fracciones).
   const unidadCant = presSel && presSel.cantidad_base !== 1 ? "UNIDAD" : (sel?.unidad_medida ?? "UNIDAD");
 
+  /**
+   * El input guarda el texto tal cual se tecleó, así que sobre un precio
+   * precargado en "0" escribir 200 dejaba "0200". Se quitan los ceros que
+   * quedan a la izquierda, sin tocar el "0" solo ni el "0,5" de USD.
+   */
+  function sinCerosAlaIzquierda(v: string): string {
+    return v.replace(/^(-?)0+(?=\d)/, "$1");
+  }
+
   /** Precio en la moneda activa de la venta (string para el input). */
   function precioEnMonedaStr(precioGs: number): string {
     if (moneda === "USD" && tipoCambio > 0) return String(Math.round((precioGs / tipoCambio) * 100) / 100);
@@ -552,6 +561,7 @@ export default function ProductPickerModal({
                         inputMode={permiteDecimales(unidadCant) ? "decimal" : "numeric"}
                         value={cantidad}
                         onChange={(e) => setCantidad(e.target.value)}
+                        onFocus={(e) => e.currentTarget.select()}
                         className="w-full border border-slate-200 rounded-lg px-2 py-1.5 text-sm"
                       />
                       {presSel && presSel.cantidad_base !== 1 && (parseCantidad(cantidad, unidadCant) ?? 0) > 0 && (
@@ -571,7 +581,8 @@ export default function ProductPickerModal({
                       <input
                         type="number" min={0}
                         value={precio}
-                        onChange={(e) => setPrecio(e.target.value)}
+                        onChange={(e) => setPrecio(sinCerosAlaIzquierda(e.target.value))}
+                        onFocus={(e) => e.currentTarget.select()}
                         className="w-full border border-slate-200 rounded-lg px-2 py-1.5 text-sm"
                       />
                       {moneda === "USD" && (parseFloat(precio) || 0) > 0 && (
