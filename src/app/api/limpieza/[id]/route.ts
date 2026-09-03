@@ -12,7 +12,7 @@ import type { MonedaLimpieza, TipoFacturaLimpieza } from "@/lib/limpieza/types";
 
 export const dynamic = "force-dynamic";
 
-const FECHA_RE = /^d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]d|3[01])$/;
+const FECHA_RE = /^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/;
 
 /**
  * PATCH /api/limpieza/[id] — corrige un servicio ya cargado.
@@ -81,7 +81,7 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
 
     const cambiaLoFacturable =
       actual.cliente_id !== clienteId ||
-      String(actual.fecha_servicio) !== fecha ||
+      toCalendarDateStr(actual.fecha_servicio) !== fecha ||
       Number(actual.importe) !== importe ||
       (actual.moneda === "USD" ? "USD" : "GS") !== moneda;
 

@@ -176,36 +176,52 @@ async function fetchAll(
 }
 
 type SuscInfo = {
-  tipo_servicio: string | null;
   /** Tipo del PLAN (slug del catálogo): fuente del tipo del SERVICIO en Cobranzas. */
   plan_tipo: string | null;
   plan: string | null;
   precio: number | null;
 };
 
-/** Mapa suscripcion_id → { tipo_servicio, plan_tipo, plan, precio } (TODAS las suscripciones, cualquier estado). */
-async function cargarSuscripcionInfo(sb: Sb, empresaId: string): Promise<Map<string, SuscInfo>> {
-  const subs = await fetchAll(sb, "suscripciones", "id, plan_id, precio, tipo_servicio", empresaId);
-  const planIds = [...new Set(subs.map((s) => String(s.plan_id ?? "")).filter(Boolean))];
-  const planNombre = new Map<string, string>();
-  const planTipo = new Map<string, string | null>();
-  for (let i = 0; i < planIds.length; i += 120) {
-    const slice = planIds.slice(i, i + 120);
+/**
+ * `planes.tipo_servicio` no existe en todos los esquemas de tenant: los clonados
+ * más nuevos no lo traen. Se pide, y si el esquema no lo tiene se reintenta sin
+ * esa columna — de otro modo se perdía también el nombre del plan, que sí está.
+ */
+async function cargarPlanes(
+  sb: Sb,
+  ids: string[]
+): Promise<{ nombre: Map<string, string>; tipo: Map<string, string | null> }> {
+  const nombre = new Map<string, string>();
+  const tipo = new Map<string, string | null>();
+  for (let i = 0; i < ids.length; i += 120) {
+    const slice = ids.slice(i, i + 120);
     if (slice.length === 0) break;
-    const { data } = await sb.from("planes").select("id, nombre, tipo_servicio").in("id", slice);
-    for (const p of (data ?? []) as Record<string, unknown>[]) {
-      planNombre.set(String(p.id), String(p.nombre ?? ""));
+    const conTipo = await sb.from("planes").select("id, nombre, tipo_servicio").in("id", slice);
+    const filas = conTipo.error
+      ? ((await sb.from("planes").select("id, nombre").in("id", slice)).data ?? [])
+      : (conTipo.data ?? []);
+    for (const p of filas as unknown as Record<string, unknown>[]) {
+      nombre.set(String(p.id), String(p.nombre ?? ""));
       const t = p.tipo_servicio != null ? String(p.tipo_servicio).trim().toLowerCase() : "";
-      planTipo.set(String(p.id), t || null);
+      tipo.set(String(p.id), t || null);
     }
   }
+  return { nombre, tipo };
+}
+
+/** Mapa suscripcion_id → { plan_tipo, plan, precio } (TODAS las suscripciones, cualquier estado). */
+async function cargarSuscripcionInfo(sb: Sb, empresaId: string): Promise<Map<string, SuscInfo>> {
+  // `suscripciones.tipo_servicio` tampoco existe en todos los esquemas, y el
+  // agrupador no lo usa: el tipo del servicio sale del plan, con fallback al cliente.
+  const subs = await fetchAll(sb, "suscripciones", "id, plan_id, precio", empresaId);
+  const planIds = [...new Set(subs.map((s) => String(s.plan_id ?? "")).filter(Boolean))];
+  const planes = await cargarPlanes(sb, planIds);
   const map = new Map<string, SuscInfo>();
   for (const s of subs) {
     const planId = String(s.plan_id ?? "");
     map.set(String(s.id), {
-      tipo_servicio: s.tipo_servicio != null ? String(s.tipo_servicio) : null,
-      plan_tipo: planTipo.get(planId) ?? null,
-      plan: planNombre.get(planId) || null,
+      plan_tipo: planes.tipo.get(planId) ?? null,
+      plan: planes.nombre.get(planId) || null,
       precio: s.precio != null ? Number(s.precio) : null,
     });
   }
