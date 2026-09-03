@@ -3,6 +3,7 @@ import { requireLotesModuleAccess } from "@/lib/lotes/lotes-auth";
 import { errorResponse, successResponse } from "@/lib/api/response";
 import {
   calcularMoraCuota,
+  esFrecuencia,
   generarPlanCuotas,
   DIAS_GRACIA,
   MORA_ADMINISTRATIVA_DIARIA,
@@ -153,6 +154,9 @@ export async function POST(request: Request) {
   const precioContado = Number(body.precio_contado);
   const entregaInicial = Number(body.entrega_inicial ?? 0);
   const recargo = body.recargo_pct == null ? RECARGO_FINANCIACION : Number(body.recargo_pct);
+  const frecuencia = esFrecuencia(body.frecuencia) ? body.frecuencia : "mensual";
+  const simulacionId =
+    typeof body.simulacion_id === "string" && body.simulacion_id.trim() ? body.simulacion_id.trim() : null;
   const codeudores = Array.isArray(body.codeudores)
     ? [...new Set(body.codeudores.filter((c): c is string => typeof c === "string" && !!c.trim()))]
     : [];
@@ -188,6 +192,7 @@ export async function POST(request: Request) {
       cantidadCuotas,
       primerVencimiento,
       recargo,
+      frecuencia,
     });
   } catch (e) {
     // Los errores del motor son de negocio y ya vienen redactados para el usuario.
@@ -248,6 +253,7 @@ export async function POST(request: Request) {
         observacion: observacion || null,
         vendedor_id: vendedorId,
         comision_pct: comisionPct,
+        simulacion_id: simulacionId,
         created_by: usuarioCatalogId,
       })
       .select()
@@ -292,6 +298,28 @@ export async function POST(request: Request) {
       .eq("id", loteId)
       .eq("empresa_id", empresaId);
     if (errLoteUpd) throw new Error(`No se pudo marcar el lote como vendido: ${errLoteUpd.message}`);
+
+    // La propuesta que se firmó queda aprobada, y las otras que se estaban
+    // analizando para el mismo lote quedan descartadas: el historial tiene que
+    // mostrar cuál prosperó y cuáles no.
+    if (simulacionId) {
+      const { error: errSim } = await sb
+        .from("plan_simulaciones")
+        .update({ estado: "aprobada" })
+        .eq("id", simulacionId)
+        .eq("empresa_id", empresaId);
+      if (errSim) {
+        console.error("[api/lotes/ventas POST] aprobar simulación:", errSim.message);
+      } else {
+        await sb
+          .from("plan_simulaciones")
+          .update({ estado: "descartada" })
+          .eq("empresa_id", empresaId)
+          .eq("lote_id", loteId)
+          .eq("estado", "borrador")
+          .neq("id", simulacionId);
+      }
+    }
 
     return NextResponse.json(
       successResponse({

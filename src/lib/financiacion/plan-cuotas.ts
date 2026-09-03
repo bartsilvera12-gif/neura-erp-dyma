@@ -73,6 +73,39 @@ export function sumarMeses(fecha: string, meses: number): string {
   return `${base.getUTCFullYear()}-${mm}-${String(dia).padStart(2, "0")}`;
 }
 
+/** Suma días corridos a una fecha YYYY-MM-DD, en UTC (fecha de calendario). */
+export function sumarDias(fecha: string, dias: number): string {
+  const t = Date.parse(`${fecha}T00:00:00Z`) + dias * 86_400_000;
+  return new Date(t).toISOString().slice(0, 10);
+}
+
+/** Cada cuánto vence una cuota. El estándar del negocio es mensual. */
+export type Frecuencia = "quincenal" | "mensual" | "bimestral" | "trimestral" | "semestral" | "anual";
+
+/**
+ * Paso de cada frecuencia. Las mensuales y sus múltiplos avanzan por mes de
+ * calendario (conservando el día); la quincenal avanza por días corridos,
+ * porque "quincena" acá son 15 días, no medio mes.
+ */
+export const FRECUENCIAS: Record<Frecuencia, { label: string; meses: number; dias: number }> = {
+  quincenal: { label: "Quincenal", meses: 0, dias: 15 },
+  mensual: { label: "Mensual", meses: 1, dias: 0 },
+  bimestral: { label: "Bimestral", meses: 2, dias: 0 },
+  trimestral: { label: "Trimestral", meses: 3, dias: 0 },
+  semestral: { label: "Semestral", meses: 6, dias: 0 },
+  anual: { label: "Anual", meses: 12, dias: 0 },
+};
+
+export function esFrecuencia(v: unknown): v is Frecuencia {
+  return typeof v === "string" && Object.prototype.hasOwnProperty.call(FRECUENCIAS, v);
+}
+
+/** Vencimiento de la cuota `indice` (0 = la primera) según la frecuencia. */
+export function vencimientoCuota(primero: string, indice: number, frecuencia: Frecuencia): string {
+  const f = FRECUENCIAS[frecuencia];
+  return f.meses > 0 ? sumarMeses(primero, indice * f.meses) : sumarDias(primero, indice * f.dias);
+}
+
 /** Días corridos entre dos fechas YYYY-MM-DD. Positivo si `hasta` es posterior. */
 export function diasEntre(desde: string, hasta: string): number {
   return Math.round((Date.parse(`${hasta}T00:00:00Z`) - Date.parse(`${desde}T00:00:00Z`)) / 86_400_000);
@@ -97,6 +130,8 @@ export function generarPlanCuotas(input: {
   primerVencimiento: string;
   /** Por defecto 15%. Se puede pisar para planes personalizados. */
   recargo?: number;
+  /** Por defecto mensual. */
+  frecuencia?: Frecuencia;
 }): PlanCuotas {
   const precioContado = Math.round(input.precioContado);
   const entrega = Math.round(input.entregaInicial ?? 0);
@@ -129,7 +164,7 @@ export function generarPlanCuotas(input: {
     const int = esUltima ? interesTotal - interesBase * (n - 1) : interesBase;
     cuotas.push({
       numero: i,
-      vencimiento: sumarMeses(input.primerVencimiento, i - 1),
+      vencimiento: vencimientoCuota(input.primerVencimiento, i - 1, input.frecuencia ?? "mensual"),
       capital: cap,
       interes: int,
       total,
@@ -144,6 +179,117 @@ export function generarPlanCuotas(input: {
     monto_financiado: montoFinanciado,
     total_operacion: entrega + montoFinanciado,
     cuotas,
+  };
+}
+
+/**
+ * Cuántas cuotas hacen falta para cubrir `montoFinanciado` pagando `cuota` por vez.
+ *
+ * Se redondea hacia arriba: si sobra un resto, hace falta una cuota más. Esa
+ * última sale más chica que las demás, no más grande, así el cliente nunca paga
+ * de más al final.
+ */
+export function cuotasNecesarias(montoFinanciado: number, cuota: number): number {
+  if (!Number.isFinite(montoFinanciado) || montoFinanciado <= 0) {
+    throw new Error("No hay saldo para financiar");
+  }
+  if (!Number.isFinite(cuota) || cuota <= 0) {
+    throw new Error("La cuota propuesta debe ser mayor a 0");
+  }
+  return Math.max(1, Math.ceil(montoFinanciado / cuota));
+}
+
+/** Cómo se resolvió la simulación: qué dato puso el usuario y cuál dedujo el sistema. */
+export type ModoSimulacion = "por_cuota" | "por_cantidad";
+
+export interface Simulacion extends PlanCuotas {
+  modo: ModoSimulacion;
+  frecuencia: Frecuencia;
+  recargo_pct: number;
+  cantidad_cuotas: number;
+  /** La cuota pareja del plan (las primeras n-1). */
+  cuota: number;
+  /** La última, que absorbe el redondeo. Puede diferir en unos guaraníes. */
+  cuota_final: number;
+  /** Solo en modo por_cuota: lo que pidió el cliente, antes de ajustar. */
+  cuota_propuesta: number | null;
+  primer_vencimiento: string;
+  ultimo_vencimiento: string;
+}
+
+/**
+ * Simula un plan de pago sin tocar la base.
+ *
+ * Dos formas de entrar, que es lo que pide el negocio al negociar con el cliente:
+ *   - `cantidadCuotas`: "quiero 24 cuotas, ¿de cuánto me sale cada una?"
+ *   - `cuotaPropuesta`: "puedo pagar 1.000.000 por mes, ¿en cuántas termino?"
+ *
+ * En el segundo caso la cantidad sale de dividir y redondear hacia arriba, y
+ * después el plan se rearma con esa cantidad: por eso la cuota resultante puede
+ * quedar unos guaraníes por debajo de la propuesta.
+ */
+export function simularPlan(input: {
+  precioContado: number;
+  entregaInicial?: number;
+  primerVencimiento: string;
+  frecuencia?: Frecuencia;
+  recargo?: number;
+  cantidadCuotas?: number;
+  cuotaPropuesta?: number;
+}): Simulacion {
+  const frecuencia = input.frecuencia ?? "mensual";
+  const recargo = input.recargo ?? RECARGO_FINANCIACION;
+  if (!Number.isFinite(recargo) || recargo < 0 || recargo > 1) {
+    throw new Error("El recargo debe estar entre 0% y 100%");
+  }
+
+  const precioContado = Math.round(input.precioContado);
+  const entrega = Math.round(input.entregaInicial ?? 0);
+  if (!Number.isFinite(precioContado) || precioContado <= 0) {
+    throw new Error("El valor del lote debe ser mayor a 0");
+  }
+  if (entrega < 0) throw new Error("La entrega no puede ser negativa");
+  if (entrega >= precioContado) {
+    throw new Error("La entrega cubre todo el precio: no queda saldo para financiar");
+  }
+
+  const capital = precioContado - entrega;
+  const montoFinanciado = capital + Math.round(capital * recargo);
+
+  let modo: ModoSimulacion;
+  let n: number;
+  let propuesta: number | null = null;
+
+  if (input.cuotaPropuesta != null && input.cuotaPropuesta > 0) {
+    modo = "por_cuota";
+    propuesta = Math.round(input.cuotaPropuesta);
+    n = cuotasNecesarias(montoFinanciado, propuesta);
+  } else {
+    modo = "por_cantidad";
+    n = Math.trunc(input.cantidadCuotas ?? 0);
+    if (!Number.isFinite(n) || n < 1) throw new Error("Indicá la cantidad de cuotas o la cuota propuesta");
+  }
+
+  const plan = generarPlanCuotas({
+    precioContado,
+    entregaInicial: entrega,
+    cantidadCuotas: n,
+    primerVencimiento: input.primerVencimiento,
+    recargo,
+    frecuencia,
+  });
+
+  return {
+    ...plan,
+    modo,
+    frecuencia,
+    recargo_pct: recargo,
+    cantidad_cuotas: n,
+    cuota: plan.cuotas[0]?.total ?? 0,
+    cuota_final: plan.cuotas[plan.cuotas.length - 1]?.total ?? 0,
+    cuota_propuesta: propuesta,
+    primer_vencimiento: input.primerVencimiento,
+    ultimo_vencimiento: plan.cuotas[plan.cuotas.length - 1]?.vencimiento ?? input.primerVencimiento,
   };
 }
 

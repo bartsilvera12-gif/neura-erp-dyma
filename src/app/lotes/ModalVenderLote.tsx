@@ -8,13 +8,27 @@ import MontoInput from "@/components/ui/MontoInput";
 import { FechaSelect } from "@/components/ui/FechaSelect";
 import {
   generarPlanCuotas,
+  FRECUENCIAS,
   DIAS_GRACIA,
   MORA_ADMINISTRATIVA_DIARIA,
   MORA_MORATORIA_DIARIA,
   RECARGO_FINANCIACION,
 } from "@/lib/financiacion/plan-cuotas";
+import type { Frecuencia } from "@/lib/financiacion/plan-cuotas";
 import type { Lote } from "@/lib/lotes/types";
 import type { Vendedor } from "@/lib/vendedores/types";
+
+/** Condiciones que llegan del simulador, para no volver a cargarlas a mano. */
+export interface CondicionesIniciales {
+  simulacion_id: string;
+  cliente_id: string | null;
+  precio_contado: number;
+  entrega_inicial: number;
+  cantidad_cuotas: number;
+  primer_vencimiento: string;
+  recargo_pct: number;
+  frecuencia: Frecuencia;
+}
 
 const inputClass =
   "w-full border border-slate-200 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-[#0EA5E9] focus:outline-none bg-white text-sm";
@@ -50,23 +64,28 @@ function hoyYmd(): string {
 export default function ModalVenderLote({
   lote,
   opcionesCliente,
+  inicial,
   onCancel,
   onVendido,
 }: {
   lote: Lote;
   opcionesCliente: SmartOption[];
+  /** Plan aprobado en el simulador; sin esto el modal arranca en blanco. */
+  inicial?: CondicionesIniciales;
   onCancel: () => void;
   onVendido: (msg: string) => void | Promise<void>;
 }) {
-  const [clienteId, setClienteId] = useState(lote.cliente_id ?? "");
+  const [clienteId, setClienteId] = useState(inicial?.cliente_id ?? lote.cliente_id ?? "");
   const [codeudorId, setCodeudorId] = useState("");
   const [fechaVenta, setFechaVenta] = useState(hoyYmd());
-  const [primerVencimiento, setPrimerVencimiento] = useState(hoyYmd());
+  const [primerVencimiento, setPrimerVencimiento] = useState(inicial?.primer_vencimiento ?? hoyYmd());
   const [precioContado, setPrecioContado] = useState(
-    String(lote.precio_contado ?? lote.precio_financiado ?? 0)
+    String(inicial?.precio_contado ?? lote.precio_contado ?? lote.precio_financiado ?? 0)
   );
-  const [entrega, setEntrega] = useState("0");
-  const [cuotas, setCuotas] = useState("12");
+  const [entrega, setEntrega] = useState(String(inicial?.entrega_inicial ?? 0));
+  const [cuotas, setCuotas] = useState(String(inicial?.cantidad_cuotas ?? 12));
+  const [recargo, setRecargo] = useState(inicial?.recargo_pct ?? RECARGO_FINANCIACION);
+  const [frecuencia, setFrecuencia] = useState<Frecuencia>(inicial?.frecuencia ?? "mensual");
   const [observacion, setObservacion] = useState("");
   const [vendedorId, setVendedorId] = useState("");
   /** En porcentaje, como lo escribe el vendedor ("3"); la API lo pasa a fracción. */
@@ -102,13 +121,15 @@ export default function ModalVenderLote({
           entregaInicial: Number(entrega),
           cantidadCuotas: Number(cuotas),
           primerVencimiento,
+          recargo,
+          frecuencia,
         }),
         error: null as string | null,
       };
     } catch (e) {
       return { plan: null, error: e instanceof Error ? e.message : "Datos inválidos" };
     }
-  }, [precioContado, entrega, cuotas, primerVencimiento]);
+  }, [precioContado, entrega, cuotas, primerVencimiento, recargo, frecuencia]);
 
   const invalido = !clienteId || !preview.plan || guardando;
 
@@ -128,6 +149,9 @@ export default function ModalVenderLote({
           precio_contado: Number(precioContado),
           entrega_inicial: Number(entrega),
           cantidad_cuotas: Number(cuotas),
+          recargo_pct: recargo,
+          frecuencia,
+          simulacion_id: inicial?.simulacion_id ?? null,
           observacion,
           vendedor_id: vendedorId || null,
           comision_pct: vendedorId ? comision : 0,
@@ -163,13 +187,20 @@ export default function ModalVenderLote({
           <div>
             <h3 className="text-base font-semibold text-slate-900">Vender lote {lote.numero}</h3>
             <p className="mt-0.5 text-[11px] text-slate-500">
-              Recargo del {(RECARGO_FINANCIACION * 100).toFixed(0)}% sobre el capital, en cuotas iguales.
+              Recargo del {(recargo * 100).toFixed(2).replace(/\.?0+$/, "")}% sobre el capital, en cuotas iguales.
             </p>
           </div>
           <button type="button" onClick={onCancel} className="rounded-lg p-1 text-slate-400 hover:bg-slate-100">
             <X className="h-4 w-4" />
           </button>
         </div>
+
+        {inicial ? (
+          <p className="mt-3 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-[11px] text-emerald-800">
+            Condiciones traídas del plan aprobado en el simulador. Podés ajustarlas antes de confirmar; al
+            generar el contrato, esa simulación queda como aprobada.
+          </p>
+        ) : null}
 
         <div className="mt-4 grid gap-3 sm:grid-cols-2">
           <div className="sm:col-span-2">
@@ -251,6 +282,20 @@ export default function ModalVenderLote({
               decimals={moneda === "USD"}
               className={inputClass}
             />
+          </div>
+          <div>
+            <label className={labelClass}>Frecuencia de pago</label>
+            <select
+              value={frecuencia}
+              onChange={(e) => setFrecuencia(e.target.value as Frecuencia)}
+              className={inputClass}
+            >
+              {Object.entries(FRECUENCIAS).map(([k, f]) => (
+                <option key={k} value={k}>
+                  {f.label}
+                </option>
+              ))}
+            </select>
           </div>
           <div>
             <label className={labelClass}>Cantidad de cuotas</label>

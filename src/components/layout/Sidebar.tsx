@@ -85,6 +85,7 @@ const MENU_STRUCTURE: MenuItem[] = [
     icon: MapIcon,
     children: [
       { label: "Mapa de lotes", href: "/lotes", exactMatch: true },
+      { label: "Simulador", href: "/lotes/simulador" },
       { label: "Contratos", href: "/lotes/ventas" },
       { label: "Comisiones", href: "/lotes/comisiones" },
       { label: "Vendedores", href: "/lotes/vendedores" },
