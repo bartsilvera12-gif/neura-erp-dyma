@@ -200,6 +200,8 @@ export default function ClienteDetailPage() {
     direccion:           "",
     ciudad:              "",
     pais:                "",
+    nacionalidad:        "",
+    estado_civil:        "",
     sitio_web:           "",
     instagram:           "",
     linkedin:            "",
@@ -356,6 +358,8 @@ export default function ClienteDetailPage() {
         direccion:           c.direccion           ?? "",
         ciudad:              c.ciudad              ?? "",
         pais:                c.pais                ?? "",
+        nacionalidad:        c.nacionalidad        ?? "",
+        estado_civil:        c.estado_civil        ?? "",
         sitio_web:           c.sitio_web           ?? "",
         instagram:           c.instagram           ?? "",
         linkedin:            c.linkedin            ?? "",
@@ -637,6 +641,8 @@ export default function ClienteDetailPage() {
         direccion:           form.direccion.trim()           || null,
         ciudad:              form.ciudad.trim().toUpperCase()  || null,
         pais:                form.pais.trim().toUpperCase()    || null,
+        nacionalidad:        form.nacionalidad.trim()        || null,
+        estado_civil:        form.estado_civil.trim()        || null,
         sitio_web:           form.sitio_web.trim()           || null,
         instagram:           form.instagram.trim()           || null,
         linkedin:            form.linkedin.trim()            || null,
@@ -1514,6 +1520,32 @@ export default function ClienteDetailPage() {
                     ) : (
                       <input type="text" name="documento" value={form.documento} onChange={handleChange} className={inputClass} />
                     )}
+                  </div>
+                </div>
+
+                {/* Los transcribe el contrato de compraventa; sin esto salen en blanco. */}
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <div>
+                    <label className={labelClass}>Nacionalidad</label>
+                    <input
+                      type="text"
+                      name="nacionalidad"
+                      value={form.nacionalidad}
+                      onChange={handleChange}
+                      placeholder="paraguaya"
+                      className={inputClass}
+                    />
+                  </div>
+                  <div>
+                    <label className={labelClass}>Estado civil</label>
+                    <input
+                      type="text"
+                      name="estado_civil"
+                      value={form.estado_civil}
+                      onChange={handleChange}
+                      placeholder="soltero/a, casado/a…"
+                      className={inputClass}
+                    />
                   </div>
                 </div>
               </section>

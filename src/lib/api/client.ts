@@ -85,6 +85,8 @@ export async function apiCreateCliente(data: {
   direccion?: string;
   ciudad?: string;
   pais?: string;
+  nacionalidad?: string;
+  estado_civil?: string;
   sitio_web?: string;
   instagram?: string;
   linkedin?: string;

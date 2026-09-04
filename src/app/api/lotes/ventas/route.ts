@@ -14,6 +14,36 @@ import { hoyAsuncion } from "@/lib/reportes/calculo";
 import { pctDesdeFormulario } from "@/lib/vendedores/calculo-comision";
 import type { AppSupabaseClient } from "@/lib/supabase/schema";
 import type { EstadoVenta, VentaResumen } from "@/lib/financiacion/types";
+import type { ParteContrato, RolParte } from "@/lib/contratos/types";
+
+const ROLES: RolParte[] = ["conyuge", "codeudor"];
+
+/** Normaliza las partes que manda el formulario; descarta las que no tienen nombre. */
+function leerPartes(valor: unknown): ParteContrato[] {
+  if (!Array.isArray(valor)) return [];
+  const out: ParteContrato[] = [];
+  for (const item of valor) {
+    if (!item || typeof item !== "object") continue;
+    const p = item as Record<string, unknown>;
+    const rol = String(p.rol ?? "");
+    const nombre = typeof p.nombre === "string" ? p.nombre.trim() : "";
+    if (!ROLES.includes(rol as RolParte) || !nombre) continue;
+    const txt = (k: string) => (typeof p[k] === "string" && (p[k] as string).trim() ? (p[k] as string).trim() : null);
+    out.push({
+      rol: rol as RolParte,
+      cliente_id: txt("cliente_id"),
+      nombre,
+      documento: txt("documento"),
+      nacionalidad: txt("nacionalidad"),
+      estado_civil: txt("estado_civil"),
+      domicilio: txt("domicilio"),
+      telefono: txt("telefono"),
+      email: txt("email"),
+      observacion: txt("observacion"),
+    });
+  }
+  return out;
+}
 
 export const dynamic = "force-dynamic";
 
@@ -157,9 +187,11 @@ export async function POST(request: Request) {
   const frecuencia = esFrecuencia(body.frecuencia) ? body.frecuencia : "mensual";
   const simulacionId =
     typeof body.simulacion_id === "string" && body.simulacion_id.trim() ? body.simulacion_id.trim() : null;
-  const codeudores = Array.isArray(body.codeudores)
-    ? [...new Set(body.codeudores.filter((c): c is string => typeof c === "string" && !!c.trim()))]
-    : [];
+  const tipoContratoId =
+    typeof body.tipo_contrato_id === "string" && body.tipo_contrato_id.trim()
+      ? body.tipo_contrato_id.trim()
+      : null;
+  const partes = leerPartes(body.partes);
   const observacion = typeof body.observacion === "string" ? body.observacion.trim() : "";
   const vendedorId = typeof body.vendedor_id === "string" && body.vendedor_id.trim() ? body.vendedor_id.trim() : null;
   // El % se congela acá: renegociar con el vendedor no reescribe contratos firmados.
@@ -180,8 +212,14 @@ export async function POST(request: Request) {
   if (!FECHA_RE.test(primerVencimiento)) {
     return NextResponse.json(errorResponse("Fecha del primer vencimiento inválida"), { status: 400 });
   }
-  if (codeudores.includes(clienteId)) {
-    return NextResponse.json(errorResponse("El titular no puede figurar además como codeudor"), { status: 400 });
+  if (partes.some((p) => p.cliente_id && p.cliente_id === clienteId)) {
+    return NextResponse.json(
+      errorResponse("El titular no puede figurar además como cónyuge o codeudor"),
+      { status: 400 }
+    );
+  }
+  if (partes.filter((p) => p.rol === "conyuge").length > 1) {
+    return NextResponse.json(errorResponse("Solo puede haber un cónyuge en el contrato"), { status: 400 });
   }
 
   let plan;
@@ -226,6 +264,30 @@ export async function POST(request: Request) {
       .maybeSingle();
     if (!cli) return NextResponse.json(errorResponse("Cliente no encontrado"), { status: 404 });
 
+    if (tipoContratoId) {
+      const { data: tipo, error: errTipo } = await sb
+        .from("contrato_tipos")
+        .select("nombre, requiere_conyuge, requiere_codeudor")
+        .eq("id", tipoContratoId)
+        .eq("empresa_id", empresaId)
+        .maybeSingle();
+      if (errTipo) throw new Error(errTipo.message);
+      if (!tipo) return NextResponse.json(errorResponse("Tipo de contrato no encontrado"), { status: 404 });
+      const t = tipo as { nombre: string; requiere_conyuge: boolean; requiere_codeudor: boolean };
+      if (t.requiere_conyuge && !partes.some((p) => p.rol === "conyuge")) {
+        return NextResponse.json(
+          errorResponse(`«${t.nombre}» necesita los datos del cónyuge.`),
+          { status: 400 }
+        );
+      }
+      if (t.requiere_codeudor && !partes.some((p) => p.rol === "codeudor")) {
+        return NextResponse.json(
+          errorResponse(`«${t.nombre}» necesita los datos del codeudor.`),
+          { status: 400 }
+        );
+      }
+    }
+
     const numeroContrato = await siguienteNumeroContrato(sb, empresaId);
     const moneda = (lote as { moneda?: string }).moneda === "USD" ? "USD" : "GS";
 
@@ -254,6 +316,7 @@ export async function POST(request: Request) {
         vendedor_id: vendedorId,
         comision_pct: comisionPct,
         simulacion_id: simulacionId,
+        tipo_contrato_id: tipoContratoId,
         created_by: usuarioCatalogId,
       })
       .select()
@@ -285,11 +348,11 @@ export async function POST(request: Request) {
     );
     if (errCuotas) throw new Error(`No se pudieron generar las cuotas: ${errCuotas.message}`);
 
-    if (codeudores.length > 0) {
-      const { error: errCod } = await sb.from("lote_venta_codeudores").insert(
-        codeudores.map((cid) => ({ empresa_id: empresaId, venta_id: ventaId, cliente_id: cid }))
-      );
-      if (errCod) throw new Error(`No se pudieron registrar los codeudores: ${errCod.message}`);
+    if (partes.length > 0) {
+      const { error: errPartes } = await sb
+        .from("lote_venta_partes")
+        .insert(partes.map((p) => ({ ...p, empresa_id: empresaId, venta_id: ventaId })));
+      if (errPartes) throw new Error(`No se pudieron registrar las partes del contrato: ${errPartes.message}`);
     }
 
     const { error: errLoteUpd } = await sb
@@ -333,7 +396,7 @@ export async function POST(request: Request) {
     // Rollback manual: PostgREST no da transacciones entre tablas.
     if (ventaId) {
       await auth.sb.from("lote_venta_cuotas").delete().eq("venta_id", ventaId).eq("empresa_id", auth.empresaId);
-      await auth.sb.from("lote_venta_codeudores").delete().eq("venta_id", ventaId).eq("empresa_id", auth.empresaId);
+      await auth.sb.from("lote_venta_partes").delete().eq("venta_id", ventaId).eq("empresa_id", auth.empresaId);
       await auth.sb.from("lote_ventas").delete().eq("id", ventaId).eq("empresa_id", auth.empresaId);
     }
     console.error("[api/lotes/ventas POST]", e instanceof Error ? e.message : e);

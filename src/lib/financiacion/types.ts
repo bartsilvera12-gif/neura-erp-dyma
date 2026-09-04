@@ -44,7 +44,17 @@ export interface VentaLote {
   lote_label: string;
   cliente_id: string;
   cliente_label: string;
-  codeudores: { id: string; cliente_id: string; label: string }[];
+  /** Cónyuge y codeudores, con los datos que va a transcribir el contrato. */
+  partes: {
+    id: string;
+    rol: "conyuge" | "codeudor";
+    nombre: string;
+    documento: string | null;
+    domicilio: string | null;
+    telefono: string | null;
+  }[];
+  /** Tipo de contrato elegido al vender; null en contratos anteriores al catálogo. */
+  tipo_contrato: { id: string; slug: string; nombre: string } | null;
   precio_contado: number;
   entrega_inicial: number;
   capital: number;

@@ -17,6 +17,23 @@ import {
 import type { Frecuencia } from "@/lib/financiacion/plan-cuotas";
 import type { Lote } from "@/lib/lotes/types";
 import type { Vendedor } from "@/lib/vendedores/types";
+import type { ContratoTipo, ParteContrato, RolParte } from "@/lib/contratos/types";
+
+/** Parte vacía: el formulario arranca en blanco y se completa a mano. */
+function parteVacia(rol: RolParte): ParteContrato {
+  return {
+    rol,
+    cliente_id: null,
+    nombre: "",
+    documento: "",
+    nacionalidad: "paraguaya",
+    estado_civil: "",
+    domicilio: "",
+    telefono: "",
+    email: "",
+    observacion: null,
+  };
+}
 
 /** Condiciones que llegan del simulador, para no volver a cargarlas a mano. */
 export interface CondicionesIniciales {
@@ -76,7 +93,10 @@ export default function ModalVenderLote({
   onVendido: (msg: string) => void | Promise<void>;
 }) {
   const [clienteId, setClienteId] = useState(inicial?.cliente_id ?? lote.cliente_id ?? "");
-  const [codeudorId, setCodeudorId] = useState("");
+  const [tipos, setTipos] = useState<ContratoTipo[]>([]);
+  const [tipoId, setTipoId] = useState("");
+  const [conyuge, setConyuge] = useState<ParteContrato>(() => parteVacia("conyuge"));
+  const [codeudores, setCodeudores] = useState<ParteContrato[]>([]);
   const [fechaVenta, setFechaVenta] = useState(hoyYmd());
   const [primerVencimiento, setPrimerVencimiento] = useState(inicial?.primer_vencimiento ?? hoyYmd());
   const [precioContado, setPrecioContado] = useState(
@@ -95,6 +115,16 @@ export default function ModalVenderLote({
   const [err, setErr] = useState<string | null>(null);
 
   useEffect(() => {
+    fetchWithSupabaseSession("/api/lotes/contrato-tipos", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((j: { success?: boolean; data?: { tipos: ContratoTipo[] } }) => {
+        const lista = j.success === true && j.data ? j.data.tipos : [];
+        setTipos(lista);
+        // El primero del catálogo es el contrato normal; se preselecciona.
+        if (lista.length > 0) setTipoId((prev) => prev || lista[0]!.id);
+      })
+      .catch(() => setTipos([]));
+
     fetchWithSupabaseSession("/api/lotes/vendedores", { cache: "no-store" })
       .then((r) => r.json())
       .then((j: { success?: boolean; data?: { vendedores: Vendedor[] } }) => {
@@ -102,6 +132,16 @@ export default function ModalVenderLote({
       })
       .catch(() => setVendedores([]));
   }, []);
+
+  const tipoElegido = tipos.find((t) => t.id === tipoId) ?? null;
+
+  function elegirTipo(id: string) {
+    setTipoId(id);
+    const t = tipos.find((x) => x.id === id) ?? null;
+    if (!t?.requiere_conyuge) setConyuge(parteVacia("conyuge"));
+    if (t?.requiere_codeudor && codeudores.length === 0) setCodeudores([parteVacia("codeudor")]);
+    if (!t?.requiere_codeudor) setCodeudores([]);
+  }
 
   /** Al elegir vendedor se propone SU comisión; queda editable para esta venta. */
   function elegirVendedor(id: string) {
@@ -131,7 +171,10 @@ export default function ModalVenderLote({
     }
   }, [precioContado, entrega, cuotas, primerVencimiento, recargo, frecuencia]);
 
-  const invalido = !clienteId || !preview.plan || guardando;
+  const faltaConyuge = tipoElegido?.requiere_conyuge === true && !conyuge.nombre.trim();
+  const faltaCodeudor =
+    tipoElegido?.requiere_codeudor === true && !codeudores.some((c) => c.nombre.trim());
+  const invalido = !clienteId || !preview.plan || guardando || faltaConyuge || faltaCodeudor;
 
   async function confirmar() {
     setErr(null);
@@ -143,7 +186,11 @@ export default function ModalVenderLote({
         body: JSON.stringify({
           lote_id: lote.id,
           cliente_id: clienteId,
-          codeudores: codeudorId ? [codeudorId] : [],
+          tipo_contrato_id: tipoId || null,
+          partes: [
+            ...(tipoElegido?.requiere_conyuge ? [conyuge] : []),
+            ...(tipoElegido?.requiere_codeudor ? codeudores : []),
+          ].filter((x) => x.nombre.trim()),
           fecha_venta: fechaVenta,
           primer_vencimiento: primerVencimiento,
           precio_contado: Number(precioContado),
@@ -204,6 +251,20 @@ export default function ModalVenderLote({
 
         <div className="mt-4 grid gap-3 sm:grid-cols-2">
           <div className="sm:col-span-2">
+            <label className={labelClass}>Tipo de contrato</label>
+            <select value={tipoId} onChange={(e) => elegirTipo(e.target.value)} className={inputClass}>
+              {tipos.length === 0 ? <option value="">Sin tipos configurados</option> : null}
+              {tipos.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.nombre}
+                </option>
+              ))}
+            </select>
+            {tipoElegido?.descripcion ? (
+              <p className="mt-1 text-[10px] text-slate-400">{tipoElegido.descripcion}</p>
+            ) : null}
+          </div>
+          <div className="sm:col-span-2">
             <label className={labelClass}>Cliente titular</label>
             <SmartSearchSelect
               options={opcionesCliente}
@@ -212,17 +273,40 @@ export default function ModalVenderLote({
               placeholder="Buscar cliente…"
             />
           </div>
-          <div className="sm:col-span-2">
-            <label className={labelClass}>
-              Codeudor <span className="font-normal text-slate-400">(opcional)</span>
-            </label>
-            <SmartSearchSelect
-              options={[{ id: "", label: "Sin codeudor" }, ...opcionesCliente.filter((o) => o.id !== clienteId)]}
-              value={codeudorId}
-              onChange={setCodeudorId}
-              placeholder="Sin codeudor"
-            />
-          </div>
+          {tipoElegido?.requiere_conyuge ? (
+            <div className="sm:col-span-2">
+              <FormParte
+                titulo="Datos del cónyuge"
+                parte={conyuge}
+                onChange={setConyuge}
+              />
+            </div>
+          ) : null}
+
+          {tipoElegido?.requiere_codeudor ? (
+            <div className="sm:col-span-2 space-y-3">
+              {codeudores.map((c, i) => (
+                <FormParte
+                  key={i}
+                  titulo={codeudores.length > 1 ? `Datos del codeudor ${i + 1}` : "Datos del codeudor"}
+                  parte={c}
+                  onChange={(v) => setCodeudores((prev) => prev.map((x, j) => (j === i ? v : x)))}
+                  onQuitar={
+                    codeudores.length > 1
+                      ? () => setCodeudores((prev) => prev.filter((_, j) => j !== i))
+                      : undefined
+                  }
+                />
+              ))}
+              <button
+                type="button"
+                onClick={() => setCodeudores((prev) => [...prev, parteVacia("codeudor")])}
+                className="text-[11px] font-semibold text-[#0EA5E9] hover:underline"
+              >
+                + Agregar otro codeudor
+              </button>
+            </div>
+          ) : null}
           <div>
             <label className={labelClass}>
               Vendedor <span className="font-normal text-slate-400">(opcional)</span>
@@ -382,6 +466,65 @@ export default function ModalVenderLote({
           >
             {guardando ? "Generando…" : "Confirmar venta"}
           </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Datos completos de una parte que firma. Se guardan con el contrato y no con el
+ * cliente: un codeudor puede no ser cliente de la empresa, y el contrato firmado
+ * no debe cambiar si mañana se edita esa ficha.
+ */
+function FormParte({
+  titulo,
+  parte,
+  onChange,
+  onQuitar,
+}: {
+  titulo: string;
+  parte: ParteContrato;
+  onChange: (p: ParteContrato) => void;
+  onQuitar?: () => void;
+}) {
+  const set = (campo: keyof ParteContrato) => (e: React.ChangeEvent<HTMLInputElement>) =>
+    onChange({ ...parte, [campo]: e.target.value });
+
+  return (
+    <div className="rounded-xl border border-slate-200 bg-slate-50/60 p-3">
+      <div className="mb-2 flex items-center justify-between">
+        <p className="text-xs font-semibold text-slate-600">{titulo}</p>
+        {onQuitar ? (
+          <button type="button" onClick={onQuitar} className="text-[11px] text-slate-400 hover:text-rose-600">
+            Quitar
+          </button>
+        ) : null}
+      </div>
+      <div className="grid gap-2 sm:grid-cols-2">
+        <div className="sm:col-span-2">
+          <label className={labelClass}>Nombre y apellido</label>
+          <input value={parte.nombre} onChange={set("nombre")} className={inputClass} />
+        </div>
+        <div>
+          <label className={labelClass}>C.I. / RUC</label>
+          <input value={parte.documento ?? ""} onChange={set("documento")} className={inputClass} />
+        </div>
+        <div>
+          <label className={labelClass}>Estado civil</label>
+          <input value={parte.estado_civil ?? ""} onChange={set("estado_civil")} className={inputClass} />
+        </div>
+        <div>
+          <label className={labelClass}>Nacionalidad</label>
+          <input value={parte.nacionalidad ?? ""} onChange={set("nacionalidad")} className={inputClass} />
+        </div>
+        <div>
+          <label className={labelClass}>Teléfono</label>
+          <input value={parte.telefono ?? ""} onChange={set("telefono")} className={inputClass} />
+        </div>
+        <div className="sm:col-span-2">
+          <label className={labelClass}>Domicilio real</label>
+          <input value={parte.domicilio ?? ""} onChange={set("domicilio")} className={inputClass} />
         </div>
       </div>
     </div>

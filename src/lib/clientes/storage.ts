@@ -42,6 +42,8 @@ interface SupabaseRow {
   sifen_direccion_de?: string | null;
   sifen_num_casa_de?: number | string | null;
   sifen_descripcion_tipo_doc?: string | null;
+  nacionalidad:       string | null;
+  estado_civil:       string | null;
   sitio_web:          string | null;
   instagram:          string | null;
   linkedin:           string | null;
@@ -94,6 +96,8 @@ function rowToCliente(row: SupabaseRow): Cliente {
     direccion:           row.direccion ?? undefined,
     ciudad:              row.ciudad ?? undefined,
     pais:                row.pais ?? undefined,
+    nacionalidad:        row.nacionalidad ?? undefined,
+    estado_civil:        row.estado_civil ?? undefined,
     sitio_web:           row.sitio_web ?? undefined,
     instagram:           row.instagram ?? undefined,
     linkedin:            row.linkedin ?? undefined,
@@ -279,6 +283,8 @@ export async function saveCliente(datos: NuevoClienteData): Promise<Cliente | nu
     direccion:          datos.direccion ?? null,
     ciudad:             datos.ciudad ?? null,
     pais:               datos.pais ?? null,
+    nacionalidad:       datos.nacionalidad ?? null,
+    estado_civil:       datos.estado_civil ?? null,
     sitio_web:          datos.sitio_web ?? null,
     instagram:          datos.instagram ?? null,
     linkedin:           datos.linkedin ?? null,
@@ -351,6 +357,8 @@ type CampoBorrable =
   | "direccion"
   | "ciudad"
   | "pais"
+  | "nacionalidad"
+  | "estado_civil"
   | "sitio_web"
   | "instagram"
   | "linkedin"
@@ -460,6 +468,8 @@ export function construirPatchActualizacionCliente(datos: ActualizarClienteInput
           : String(datos.sifen_descripcion_tipo_doc).trim().slice(0, 41);
     }
   }
+  if (datos.nacionalidad !== undefined) patch.nacionalidad = textoOpcional(datos.nacionalidad);
+  if (datos.estado_civil !== undefined) patch.estado_civil = textoOpcional(datos.estado_civil);
   if (datos.sitio_web !== undefined) patch.sitio_web = textoOpcional(datos.sitio_web);
   if (datos.instagram !== undefined) patch.instagram = textoOpcional(datos.instagram);
   if (datos.linkedin !== undefined) patch.linkedin = textoOpcional(datos.linkedin);

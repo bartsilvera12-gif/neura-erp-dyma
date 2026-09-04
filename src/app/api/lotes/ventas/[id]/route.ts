@@ -33,24 +33,31 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
 
     const v = venta as Record<string, unknown>;
 
-    const [cuotasRes, codRes, loteRes] = await Promise.all([
+    const [cuotasRes, partesRes, loteRes, tipoRes] = await Promise.all([
       sb.from("lote_venta_cuotas").select("*").eq("venta_id", id).eq("empresa_id", empresaId).order("numero"),
-      sb.from("lote_venta_codeudores").select("id, cliente_id").eq("venta_id", id).eq("empresa_id", empresaId),
+      sb
+        .from("lote_venta_partes")
+        .select("id, rol, nombre, documento, domicilio, telefono")
+        .eq("venta_id", id)
+        .eq("empresa_id", empresaId)
+        .order("created_at"),
       sb.from("lotes").select("id, numero, manzana_id").eq("id", String(v.lote_id)).maybeSingle(),
+      v.tipo_contrato_id
+        ? sb.from("contrato_tipos").select("id, slug, nombre").eq("id", String(v.tipo_contrato_id)).maybeSingle()
+        : Promise.resolve({ data: null }),
     ]);
     if (cuotasRes.error) throw new Error(cuotasRes.error.message);
 
     const filasCuotas = (cuotasRes.data ?? []) as Record<string, unknown>[];
-    const codeudoresRaw = (codRes.data ?? []) as { id: string; cliente_id: string }[];
+    const partesRaw = (partesRes.data ?? []) as Record<string, unknown>[];
+    const tipoRaw = (tipoRes.data ?? null) as Record<string, unknown> | null;
 
-    // Etiquetas de titular y codeudores en una sola consulta.
-    const idsClientes = [...new Set([String(v.cliente_id), ...codeudoresRaw.map((c) => c.cliente_id)])];
     const etiquetas: Record<string, string> = {};
-    if (idsClientes.length > 0) {
+    {
       const { data: cls } = await sb
         .from("clientes")
         .select("id, empresa, nombre_contacto, nombre")
-        .in("id", idsClientes);
+        .eq("id", String(v.cliente_id));
       for (const c of (cls ?? []) as Record<string, string | null>[]) {
         if (!c.id) continue;
         etiquetas[c.id] = (c.empresa || c.nombre_contacto || c.nombre || "").trim() || "Cliente sin nombre";
@@ -117,11 +124,17 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
       lote_label: lote?.numero ? `Lote ${lote.numero}` : "Lote",
       cliente_id: String(v.cliente_id),
       cliente_label: etiquetas[String(v.cliente_id)] ?? "Cliente sin nombre",
-      codeudores: codeudoresRaw.map((c) => ({
-        id: c.id,
-        cliente_id: c.cliente_id,
-        label: etiquetas[c.cliente_id] ?? "Cliente sin nombre",
+      partes: partesRaw.map((p) => ({
+        id: String(p.id),
+        rol: p.rol === "conyuge" ? ("conyuge" as const) : ("codeudor" as const),
+        nombre: String(p.nombre ?? ""),
+        documento: (p.documento as string) ?? null,
+        domicilio: (p.domicilio as string) ?? null,
+        telefono: (p.telefono as string) ?? null,
       })),
+      tipo_contrato: tipoRaw
+        ? { id: String(tipoRaw.id), slug: String(tipoRaw.slug), nombre: String(tipoRaw.nombre) }
+        : null,
       precio_contado: Number(v.precio_contado ?? 0),
       entrega_inicial: Number(v.entrega_inicial ?? 0),
       capital: Number(v.capital ?? 0),

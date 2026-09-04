@@ -41,6 +41,10 @@ export interface Cliente {
   ciudad?:             string;
   pais?:               string;
 
+  /** Datos que transcribe el contrato de compraventa. Texto libre. */
+  nacionalidad?:       string;
+  estado_civil?:       string;
+
   /** El cliente requiere nota de remisión al venderle (documento no fiscal). */
   usa_nota_remision?:  boolean;
 
