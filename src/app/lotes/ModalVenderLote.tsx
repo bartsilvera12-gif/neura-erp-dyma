@@ -9,6 +9,7 @@ import { FechaSelect } from "@/components/ui/FechaSelect";
 import {
   generarPlanCuotas,
   FRECUENCIAS,
+  MAX_CUOTAS,
   DIAS_GRACIA,
   MORA_ADMINISTRATIVA_DIARIA,
   MORA_MORATORIA_DIARIA,
@@ -386,6 +387,7 @@ export default function ModalVenderLote({
             <input
               type="number"
               min={1}
+              max={MAX_CUOTAS}
               value={cuotas}
               onChange={(e) => setCuotas(e.target.value)}
               className={inputClass}

@@ -14,6 +14,16 @@
 /** Recargo por financiar, sobre el capital. */
 export const RECARGO_FINANCIACION = 0.15;
 
+/**
+ * Tope de cuotas de un plan: 600 son 50 años de cuotas mensuales.
+ *
+ * No es un capricho de negocio, es un cortafuegos. El plan se arma cuota por
+ * cuota, así que una cantidad disparatada congela el navegador mientras teclea
+ * el vendedor —basta proponer una cuota muy chica para que el cálculo pida
+ * millones de cuotas— y colgaría igual al servidor si llega por la API.
+ */
+export const MAX_CUOTAS = 600;
+
 /** Días de gracia antes de que empiece a correr la mora. */
 export const DIAS_GRACIA = 5;
 
@@ -146,6 +156,9 @@ export function generarPlanCuotas(input: {
     throw new Error("La entrega inicial no puede cubrir todo el precio: no habría nada que financiar");
   }
   if (!Number.isFinite(n) || n < 1) throw new Error("La cantidad de cuotas debe ser al menos 1");
+  if (n > MAX_CUOTAS) {
+    throw new Error(`El plan no puede tener más de ${MAX_CUOTAS} cuotas (son 50 años).`);
+  }
 
   const capital = precioContado - entrega;
   const interesTotal = Math.round(capital * recargo);
@@ -196,7 +209,9 @@ export function cuotasNecesarias(montoFinanciado: number, cuota: number): number
   if (!Number.isFinite(cuota) || cuota <= 0) {
     throw new Error("La cuota propuesta debe ser mayor a 0");
   }
-  return Math.max(1, Math.ceil(montoFinanciado / cuota));
+  const n = Math.ceil(montoFinanciado / cuota);
+  if (!Number.isFinite(n)) throw new Error("La cuota propuesta no permite calcular un plan");
+  return Math.max(1, n);
 }
 
 /** Cómo se resolvió la simulación: qué dato puso el usuario y cuál dedujo el sistema. */
@@ -264,6 +279,13 @@ export function simularPlan(input: {
     modo = "por_cuota";
     propuesta = Math.round(input.cuotaPropuesta);
     n = cuotasNecesarias(montoFinanciado, propuesta);
+    if (n > MAX_CUOTAS) {
+      const minima = Math.ceil(montoFinanciado / MAX_CUOTAS);
+      throw new Error(
+        `Con una cuota de ${propuesta.toLocaleString("es-PY")} harían falta ${n.toLocaleString("es-PY")} cuotas. ` +
+          `La cuota mínima para entrar en ${MAX_CUOTAS} es ${minima.toLocaleString("es-PY")}.`
+      );
+    }
   } else {
     modo = "por_cantidad";
     n = Math.trunc(input.cantidadCuotas ?? 0);

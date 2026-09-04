@@ -11,6 +11,7 @@ import { FechaSelect } from "@/components/ui/FechaSelect";
 import ModalVenderLote, { type CondicionesIniciales } from "../ModalVenderLote";
 import {
   FRECUENCIAS,
+  MAX_CUOTAS,
   RECARGO_FINANCIACION,
   simularPlan,
   type Frecuencia,
@@ -364,6 +365,7 @@ export default function SimuladorClient() {
                   <input
                     type="number"
                     min={1}
+                    max={MAX_CUOTAS}
                     value={cantidadCuotas}
                     onChange={(e) => setCantidadCuotas(e.target.value)}
                     onFocus={(e) => e.currentTarget.select()}
