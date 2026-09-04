@@ -66,6 +66,65 @@ body {
 }
 
 /**
+ * Imprimir cualquier pantalla del ERP.
+ *
+ * El AppShell mide h-svh y el contenido scrollea dentro de #neura-main-content.
+ * Al imprimir, eso hacía que el navegador capturara solo lo que entraba en la
+ * pantalla: una foto de la vista, cortada, en una sola hoja. Soltando las
+ * alturas y el overflow, el contenido fluye y se pagina como corresponde.
+ *
+ * Los documentos formales (contrato, recibo, factura) NO dependen de esto: se
+ * sirven como su propia página desde la API, con su propio diseño A4.
+ */
+@media print {
+  html,
+  body {
+    height: auto !important;
+    min-height: 0 !important;
+    overflow: visible !important;
+    background: #fff !important;
+  }
+
+  #neura-sidebar,
+  #neura-header {
+    display: none !important;
+  }
+
+  #neura-app-shell,
+  #neura-main-column {
+    display: block !important;
+    height: auto !important;
+    min-height: 0 !important;
+    overflow: visible !important;
+    background: #fff !important;
+  }
+
+  #neura-main-content {
+    overflow: visible !important;
+    height: auto !important;
+    min-height: 0 !important;
+    padding: 0 !important;
+  }
+
+  /* Controles que en papel no sirven para nada. */
+  button,
+  [data-no-print] {
+    display: none !important;
+  }
+
+  /* Que una tabla no se parta en cualquier lado. */
+  tr,
+  img {
+    break-inside: avoid;
+  }
+
+  @page {
+    size: A4;
+    margin: 12mm;
+  }
+}
+
+/**
  * Impresión cupones físicos (/sorteos/[id]/imprimir-cupones): el AppShell usa h-svh + overflow
  * oculto en ancestros; en @media print eso suele dejar casi en blanco la hoja salvo cabecera/pie del navegador.
  * La clase la agrega PhysicalCouponsPrintClient al montar.

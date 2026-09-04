@@ -116,14 +116,15 @@ export default function ContratoClient({ ventaId }: { ventaId: string }) {
             <RefreshCw className="h-3.5 w-3.5" />
             Actualizar
           </button>
-          <button
-            type="button"
-            onClick={() => window.print()}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50"
+          <a
+            href={`/api/lotes/ventas/${data.id}/contrato`}
+            target="_blank"
+            rel="noopener"
+            className="inline-flex items-center gap-1.5 rounded-lg bg-[#0EA5E9] px-3.5 py-2 text-xs font-semibold text-white hover:bg-[#0284C7]"
           >
             <Printer className="h-3.5 w-3.5" />
-            Imprimir
-          </button>
+            Imprimir contrato
+          </a>
         </div>
       </div>
 
@@ -161,15 +162,6 @@ export default function ContratoClient({ ventaId }: { ventaId: string }) {
               <p className="mt-0.5 text-[11px] text-slate-500">{data.tipo_contrato.nombre}</p>
             ) : null}
           </div>
-          <a
-            href={`/api/lotes/ventas/${data.id}/contrato`}
-            target="_blank"
-            rel="noopener"
-            className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50"
-          >
-            <Printer className="h-3.5 w-3.5" />
-            Imprimir contrato
-          </a>
         </div>
         <div className="mt-2 flex flex-wrap items-center gap-2 text-sm">
           <Link href={`/clientes/${data.cliente_id}`} className="font-medium text-slate-900 hover:underline">
