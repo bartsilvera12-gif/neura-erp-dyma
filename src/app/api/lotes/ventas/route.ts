@@ -179,11 +179,16 @@ export async function POST(request: Request) {
   const loteId = typeof body.lote_id === "string" ? body.lote_id.trim() : "";
   const clienteId = typeof body.cliente_id === "string" ? body.cliente_id.trim() : "";
   const fechaVenta = typeof body.fecha_venta === "string" ? body.fecha_venta.trim() : "";
-  const primerVencimiento = typeof body.primer_vencimiento === "string" ? body.primer_vencimiento.trim() : "";
-  const cantidadCuotas = Number(body.cantidad_cuotas);
+  const primerVencimientoRaw =
+    typeof body.primer_vencimiento === "string" ? body.primer_vencimiento.trim() : "";
+  // Al contado el plan es una sola cuota que vence el día de la venta, sin
+  // recargo ni entrega: el mismo contrato, pagado de una vez. Así la venta entra
+  // al circuito de factura, cobranza y comisión sin un camino aparte.
+  const contado = body.modalidad === "contado";
+  const cantidadCuotas = contado ? 1 : Number(body.cantidad_cuotas);
   const precioContado = Number(body.precio_contado);
-  const entregaInicial = Number(body.entrega_inicial ?? 0);
-  const recargo = body.recargo_pct == null ? RECARGO_FINANCIACION : Number(body.recargo_pct);
+  const entregaInicial = contado ? 0 : Number(body.entrega_inicial ?? 0);
+  const recargo = contado ? 0 : body.recargo_pct == null ? RECARGO_FINANCIACION : Number(body.recargo_pct);
   const frecuencia = esFrecuencia(body.frecuencia) ? body.frecuencia : "mensual";
   const simulacionId =
     typeof body.simulacion_id === "string" && body.simulacion_id.trim() ? body.simulacion_id.trim() : null;
@@ -193,6 +198,7 @@ export async function POST(request: Request) {
       : null;
   const partes = leerPartes(body.partes);
   const observacion = typeof body.observacion === "string" ? body.observacion.trim() : "";
+  const primerVencimiento = contado ? fechaVenta : primerVencimientoRaw;
   const vendedorId = typeof body.vendedor_id === "string" && body.vendedor_id.trim() ? body.vendedor_id.trim() : null;
   // El % se congela acá: renegociar con el vendedor no reescribe contratos firmados.
   const comisionPct = pctDesdeFormulario(body.comision_pct == null ? 0 : (body.comision_pct as string | number));
@@ -312,6 +318,7 @@ export async function POST(request: Request) {
         mora_administrativa_pct: MORA_ADMINISTRATIVA_DIARIA,
         mora_moratoria_pct: MORA_MORATORIA_DIARIA,
         estado: "vigente",
+        modalidad: contado ? "contado" : "financiada",
         observacion: observacion || null,
         vendedor_id: vendedorId,
         comision_pct: comisionPct,
@@ -333,7 +340,7 @@ export async function POST(request: Request) {
     }
     ventaId = String(venta.id);
 
-    const { error: errCuotas } = await sb.from("lote_venta_cuotas").insert(
+    const { data: cuotasCreadas, error: errCuotas } = await sb.from("lote_venta_cuotas").insert(
       plan.cuotas.map((c) => ({
         empresa_id: empresaId,
         venta_id: ventaId,
@@ -345,8 +352,12 @@ export async function POST(request: Request) {
         saldo: c.total,
         estado: "pendiente",
       }))
-    );
+    ).select("id, numero");
     if (errCuotas) throw new Error(`No se pudieron generar las cuotas: ${errCuotas.message}`);
+
+    const primeraCuota = ((cuotasCreadas ?? []) as { id: string; numero: number }[])
+      .slice()
+      .sort((a, b) => a.numero - b.numero)[0] ?? null;
 
     if (partes.length > 0) {
       const { error: errPartes } = await sb
@@ -390,6 +401,8 @@ export async function POST(request: Request) {
         numero_contrato: numeroContrato,
         cuotas: plan.cuotas.length,
         monto_financiado: plan.monto_financiado,
+        modalidad: contado ? "contado" : "financiada",
+        primera_cuota_id: primeraCuota?.id ?? null,
       })
     );
   } catch (e) {

@@ -8,6 +8,7 @@ import { getClientes } from "@/lib/clientes/storage";
 import SmartSearchSelect, { type SmartOption } from "@/components/ui/SmartSearchSelect";
 import MontoInput from "@/components/ui/MontoInput";
 import ModalVenderLote from "./ModalVenderLote";
+import ModalVenderContado from "./ModalVenderContado";
 import type { Cliente } from "@/lib/clientes/types";
 import {
   ESTADOS_LOTE,
@@ -52,6 +53,7 @@ export default function LotesClient() {
   const [seleccionado, setSeleccionado] = useState<Lote | null>(null);
   const [modalAlta, setModalAlta] = useState(false);
   const [vendiendo, setVendiendo] = useState<Lote | null>(null);
+  const [vendiendoContado, setVendiendoContado] = useState<Lote | null>(null);
 
   const showToast = useCallback((msg: string) => {
     setToast(msg);
@@ -334,6 +336,7 @@ export default function LotesClient() {
           lote={seleccionado}
           opcionesCliente={opcionesCliente}
           onVender={(l) => { setSeleccionado(null); setVendiendo(l); }}
+        onVenderContado={(l) => { setSeleccionado(null); setVendiendoContado(l); }}
           onClose={() => setSeleccionado(null)}
           onSaved={async (msg) => {
             setSeleccionado(null);
@@ -369,6 +372,19 @@ export default function LotesClient() {
         />
       ) : null}
 
+      {vendiendoContado ? (
+        <ModalVenderContado
+          lote={vendiendoContado}
+          opcionesCliente={opcionesCliente}
+          onCancel={() => setVendiendoContado(null)}
+          onVendido={async (msg) => {
+            setVendiendoContado(null);
+            showToast(msg);
+            await load();
+          }}
+        />
+      ) : null}
+
       {toast ? (
         <div className="fixed bottom-5 left-1/2 z-[70] -translate-x-1/2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm font-medium text-emerald-800 shadow-lg">
           {toast}
@@ -397,12 +413,14 @@ function PanelLote({
   onClose,
   onSaved,
   onVender,
+  onVenderContado,
 }: {
   lote: Lote;
   opcionesCliente: SmartOption[];
   onClose: () => void;
   onSaved: (msg: string) => void | Promise<void>;
   onVender: (lote: Lote) => void;
+  onVenderContado: (lote: Lote) => void;
 }) {
   const [form, setForm] = useState({
     numero: lote.numero,
@@ -494,13 +512,22 @@ function PanelLote({
 
         <div className="mt-5 space-y-4">
           {lote.estado === "disponible" || lote.estado === "reservado" ? (
-            <button
-              type="button"
-              onClick={() => onVender(lote)}
-              className="w-full rounded-xl bg-[#0EA5E9] px-3.5 py-2.5 text-xs font-semibold text-white hover:bg-[#0284C7]"
-            >
-              Vender con financiación
-            </button>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => onVenderContado(lote)}
+                className="rounded-xl bg-emerald-600 px-3 py-2.5 text-xs font-semibold text-white hover:bg-emerald-700"
+              >
+                Vender al contado
+              </button>
+              <button
+                type="button"
+                onClick={() => onVender(lote)}
+                className="rounded-xl bg-[#0EA5E9] px-3 py-2.5 text-xs font-semibold text-white hover:bg-[#0284C7]"
+              >
+                Vender financiado
+              </button>
+            </div>
           ) : null}
 
           <section>

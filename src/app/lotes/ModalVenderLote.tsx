@@ -479,7 +479,7 @@ export default function ModalVenderLote({
  * cliente: un codeudor puede no ser cliente de la empresa, y el contrato firmado
  * no debe cambiar si mañana se edita esa ficha.
  */
-function FormParte({
+export function FormParte({
   titulo,
   parte,
   onChange,
