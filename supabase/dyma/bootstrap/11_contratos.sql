@@ -278,9 +278,10 @@ ON CONFLICT (empresa_id, slug) DO UPDATE
       orden = EXCLUDED.orden;
 
 INSERT INTO dymaerp.contrato_config
-  (empresa_id, razon_social, ruc, representante_nombre, ciudad_firma, departamento)
+  (empresa_id, razon_social, ruc, representante_nombre, domicilio, ciudad_firma, departamento)
 VALUES
-  ('06255def-3835-4d37-8f7f-801af8043e8c', 'DYMA SA', '80149103-7', 'Rody Verdón',
+  ('06255def-3835-4d37-8f7f-801af8043e8c', 'DYMA SA', '80149103-7', 'Rody Sebastian Verdún Rios',
+   'Calle Monday, Barrio San Juan, Juan Emilio O''Leary - Alto Paraná',
    'Juan E. O''Leary', 'Alto Paraná')
 ON CONFLICT (empresa_id) DO NOTHING;
 
