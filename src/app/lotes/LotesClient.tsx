@@ -6,6 +6,7 @@ import { FileText, Plus, RefreshCw, Settings2, Trash2, X } from "lucide-react";
 import { fetchWithSupabaseSession } from "@/lib/api/fetch-with-supabase-session";
 import { getClientes } from "@/lib/clientes/storage";
 import SmartSearchSelect, { type SmartOption } from "@/components/ui/SmartSearchSelect";
+import Select from "@/components/ui/Select";
 import MontoInput from "@/components/ui/MontoInput";
 import ModalVenderLote from "./ModalVenderLote";
 import ModalVenderContado from "./ModalVenderContado";
@@ -21,8 +22,9 @@ import {
 } from "@/lib/lotes/types";
 
 const inputClass =
-  "w-full border border-slate-200 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-[#0EA5E9] focus:outline-none bg-white text-sm";
-const labelClass = "block text-xs font-medium text-slate-500 mb-1";
+  "w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm text-slate-800 shadow-sm outline-none transition-colors placeholder:text-slate-400 hover:border-slate-300 focus:border-[#0EA5E9] focus:ring-2 focus:ring-[#0EA5E9]/25 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400";
+const labelClass =
+  "mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500";
 
 function etiquetaCliente(c: Cliente): string {
   return ((c.empresa ?? c.nombre_contacto) || "").trim() || "Cliente sin nombre";
@@ -153,8 +155,8 @@ export default function LotesClient() {
     <div className="w-full min-w-0 max-w-full space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-gray-800">Lotes</h1>
-          <p className="mt-0.5 text-sm text-gray-500">
+          <h1 className="text-[26px] font-bold tracking-tight text-slate-900">Lotes</h1>
+          <p className="mt-1 text-sm text-slate-500">
             Estado de cada lote del loteamiento: disponible, reservado, vendido o bloqueado.
           </p>
         </div>
@@ -222,42 +224,41 @@ export default function LotesClient() {
           <div className="grid gap-3 rounded-2xl border border-slate-200 bg-white p-4 sm:grid-cols-2 lg:grid-cols-3">
             <div>
               <label className={labelClass}>Loteamiento</label>
-              <select
+              <Select
                 value={loteamientoId}
                 onChange={(e) => {
                   setLoteamientoId(e.target.value);
                   setManzanaId("");
                 }}
-                className={inputClass}
               >
                 {(estructura?.loteamientos ?? []).map((l) => (
                   <option key={l.id} value={l.id}>
                     {l.codigo} — {l.nombre}
                   </option>
                 ))}
-              </select>
+              </Select>
             </div>
             <div>
               <label className={labelClass}>Manzana</label>
-              <select value={manzanaId} onChange={(e) => setManzanaId(e.target.value)} className={inputClass}>
+              <Select value={manzanaId} onChange={(e) => setManzanaId(e.target.value)}>
                 <option value="">Todas las manzanas</option>
                 {manzanasDelLoteamiento.map((m) => (
                   <option key={m.id} value={m.id}>
                     {m.etiqueta}
                   </option>
                 ))}
-              </select>
+              </Select>
             </div>
             <div>
               <label className={labelClass}>Estado</label>
-              <select value={filtroEstado} onChange={(e) => setFiltroEstado(e.target.value)} className={inputClass}>
+              <Select value={filtroEstado} onChange={(e) => setFiltroEstado(e.target.value)}>
                 <option value="">Todos los estados</option>
                 {ESTADOS_LOTE.map((e) => (
                   <option key={e} value={e}>
                     {ESTADO_LOTE_UI[e].label}
                   </option>
                 ))}
-              </select>
+              </Select>
             </div>
           </div>
 
@@ -395,13 +396,15 @@ export default function LotesClient() {
 }
 
 function Tarjeta({ titulo, valor, punto }: { titulo: string; valor: string; punto?: string }) {
+  // Barra de color del estado arriba: la grilla de abajo usa el mismo código.
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-4">
+    <div className="group relative overflow-hidden rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition-shadow hover:shadow-md">
+      <span className={`absolute inset-x-0 top-0 h-1 ${punto ?? "bg-slate-200"}`} />
       <p className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-slate-500">
         {punto ? <span className={`h-2 w-2 rounded-full ${punto}`} /> : null}
         {titulo}
       </p>
-      <p className="mt-1 text-xl font-bold tabular-nums text-slate-900">{valor}</p>
+      <p className="mt-1.5 text-2xl font-bold tabular-nums tracking-tight text-slate-900">{valor}</p>
     </div>
   );
 }
@@ -535,17 +538,16 @@ function PanelLote({
             <div className="grid gap-3">
               <div>
                 <label className={labelClass}>Estado</label>
-                <select
+                <Select
                   value={estado}
                   onChange={(e) => setEstado(e.target.value as EstadoLote)}
-                  className={inputClass}
                 >
                   {ESTADOS_LOTE.map((e) => (
                     <option key={e} value={e}>
                       {ESTADO_LOTE_UI[e].label}
                     </option>
                   ))}
-                </select>
+                </Select>
               </div>
               {exigeTitular ? (
                 <div>
@@ -649,14 +651,13 @@ function PanelLote({
               </div>
               <div>
                 <label className={labelClass}>Moneda</label>
-                <select
+                <Select
                   value={form.moneda}
                   onChange={(e) => set("moneda", e.target.value)}
-                  className={inputClass}
                 >
                   <option value="GS">Gs.</option>
                   <option value="USD">USD</option>
-                </select>
+                </Select>
               </div>
             </div>
             <p className="mt-2 text-[11px] text-slate-400">
@@ -781,13 +782,13 @@ function ModalNuevoLote({
         <div className="mt-4 grid gap-3">
           <div>
             <label className={labelClass}>Manzana</label>
-            <select value={manzana} onChange={(e) => setManzana(e.target.value)} className={inputClass}>
+            <Select value={manzana} onChange={(e) => setManzana(e.target.value)}>
               {manzanas.map((m) => (
                 <option key={m.id} value={m.id}>
                   {m.etiqueta}
                 </option>
               ))}
-            </select>
+            </Select>
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
@@ -831,14 +832,13 @@ function ModalNuevoLote({
             </div>
             <div>
               <label className={labelClass}>Moneda</label>
-              <select
+              <Select
                 value={moneda}
                 onChange={(e) => setMoneda(e.target.value as MonedaLote)}
-                className={inputClass}
               >
                 <option value="GS">Gs.</option>
                 <option value="USD">USD</option>
-              </select>
+              </Select>
             </div>
           </div>
         </div>

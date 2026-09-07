@@ -6,6 +6,7 @@ import { Pencil, Plus, RefreshCw, Trash2, X } from "lucide-react";
 import { fetchWithSupabaseSession } from "@/lib/api/fetch-with-supabase-session";
 import { getClientes } from "@/lib/clientes/storage";
 import SmartSearchSelect, { type SmartOption } from "@/components/ui/SmartSearchSelect";
+import Select from "@/components/ui/Select";
 import { FechaSelect } from "@/components/ui/FechaSelect";
 import type { Cliente } from "@/lib/clientes/types";
 import type {
@@ -16,8 +17,9 @@ import type {
 } from "@/lib/limpieza/types";
 
 const inputClass =
-  "w-full border border-slate-200 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-[#0EA5E9] focus:outline-none bg-white text-sm";
-const labelClass = "block text-xs font-medium text-slate-500 mb-1";
+  "w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm text-slate-800 shadow-sm outline-none transition-colors placeholder:text-slate-400 hover:border-slate-300 focus:border-[#0EA5E9] focus:ring-2 focus:ring-[#0EA5E9]/25 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400";
+const labelClass =
+  "mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500";
 
 /** Etiqueta visible del cliente: razón social si es empresa, si no el contacto. */
 function etiquetaCliente(c: Cliente): string {
@@ -153,8 +155,8 @@ export default function LimpiezaClient() {
     <div className="w-full min-w-0 max-w-full space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-gray-800">Limpieza</h1>
-          <p className="mt-0.5 text-sm text-gray-500">
+          <h1 className="text-[26px] font-bold tracking-tight text-slate-900">Limpieza</h1>
+          <p className="mt-1 text-sm text-slate-500">
             Servicios de limpieza de lote. Se cargan a mano, solo cuando el servicio se realizó.
           </p>
         </div>
@@ -358,9 +360,10 @@ function Tarjeta({
   tono?: "rose";
 }) {
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-4">
+    <div className="group relative overflow-hidden rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition-shadow hover:shadow-md">
+      <span className={`absolute inset-x-0 top-0 h-1 ${tono === "rose" ? "bg-rose-400" : "bg-[#0EA5E9]"}`} />
       <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">{titulo}</p>
-      <p className={`mt-1 text-xl font-bold tabular-nums ${tono === "rose" ? "text-rose-700" : "text-slate-900"}`}>
+      <p className={`mt-1.5 text-2xl font-bold tabular-nums tracking-tight ${tono === "rose" ? "text-rose-700" : "text-slate-900"}`}>
         {valor}
       </p>
       {extra ? <p className="mt-0.5 text-xs text-slate-500">{extra}</p> : null}
@@ -509,28 +512,26 @@ function ModalServicio({
             </div>
             <div>
               <label className={labelClass}>Moneda</label>
-              <select
+              <Select
                 value={moneda}
                 onChange={(e) => setMoneda(e.target.value as MonedaLimpieza)}
-                className={inputClass}
                 disabled={congelado}
               >
                 <option value="GS">Gs.</option>
                 <option value="USD">USD</option>
-              </select>
+              </Select>
             </div>
           </div>
           <div>
             <label className={labelClass}>Condición de la factura</label>
-            <select
+            <Select
               value={tipoFactura}
               onChange={(e) => setTipoFactura(e.target.value as TipoFacturaLimpieza)}
-              className={inputClass}
               disabled={congelado}
             >
               <option value="contado">Contado — vence el mismo día</option>
               <option value="credito">Crédito — vence según el plazo de la instancia</option>
-            </select>
+            </Select>
           </div>
           <div>
             <label className={labelClass}>

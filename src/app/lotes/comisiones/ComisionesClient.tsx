@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import Select from "@/components/ui/Select";
 import Link from "next/link";
 import { ArrowLeft, RefreshCw, Users } from "lucide-react";
 import { fetchWithSupabaseSession } from "@/lib/api/fetch-with-supabase-session";
@@ -8,8 +9,9 @@ import { pctVisible, rangoDelMes } from "@/lib/vendedores/calculo-comision";
 import type { ComisionesPayload, ComisionVendedor, Vendedor } from "@/lib/vendedores/types";
 
 const inputClass =
-  "w-full border border-slate-200 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-[#0EA5E9] focus:outline-none bg-white text-sm";
-const labelClass = "block text-xs font-medium text-slate-500 mb-1";
+  "w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm text-slate-800 shadow-sm outline-none transition-colors placeholder:text-slate-400 hover:border-slate-300 focus:border-[#0EA5E9] focus:ring-2 focus:ring-[#0EA5E9]/25 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400";
+const labelClass =
+  "mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500";
 
 const fmt = (v: number, moneda = "GS") =>
   moneda === "USD"
@@ -111,8 +113,8 @@ export default function ComisionesClient() {
             <ArrowLeft className="h-3.5 w-3.5" />
             Volver a Lotes
           </Link>
-          <h1 className="text-2xl font-bold text-gray-800">Comisiones</h1>
-          <p className="mt-0.5 text-sm text-gray-500">
+          <h1 className="text-[26px] font-bold tracking-tight text-slate-900">Comisiones</h1>
+          <p className="mt-1 text-sm text-slate-500">
             Lo que le corresponde a cada vendedor por las cuotas cobradas en el mes. Una cuota pendiente no
             genera comisión hasta que se cobra.
           </p>
@@ -144,14 +146,14 @@ export default function ComisionesClient() {
         </div>
         <div className="lg:col-span-2">
           <label className={labelClass}>Vendedor</label>
-          <select value={vendedorId} onChange={(e) => setVendedorId(e.target.value)} className={inputClass}>
+          <Select value={vendedorId} onChange={(e) => setVendedorId(e.target.value)}>
             <option value="">Todos los vendedores</option>
             {vendedores.map((v) => (
               <option key={v.id} value={v.id}>
                 {v.codigo} — {v.nombre}
               </option>
             ))}
-          </select>
+          </Select>
         </div>
       </div>
 
@@ -280,10 +282,15 @@ function BloqueVendedor({ vendedor: v }: { vendedor: ComisionVendedor }) {
 
 function Tarjeta({ titulo, valor, destacado }: { titulo: string; valor: string; destacado?: boolean }) {
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-4">
+    <div
+      className={`group relative overflow-hidden rounded-2xl border p-5 shadow-sm transition-shadow hover:shadow-md ${
+        destacado ? "border-[#0EA5E9]/40 bg-sky-50/40" : "border-slate-200 bg-white"
+      }`}
+    >
+      <span className={`absolute inset-x-0 top-0 h-1 ${destacado ? "bg-[#0EA5E9]" : "bg-slate-200"}`} />
       <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">{titulo}</p>
       <p
-        className={`mt-1 text-lg font-bold tabular-nums ${destacado ? "text-[#0EA5E9]" : "text-slate-900"}`}
+        className={`mt-1.5 text-2xl font-bold tabular-nums tracking-tight ${destacado ? "text-[#0EA5E9]" : "text-slate-900"}`}
       >
         {valor}
       </p>

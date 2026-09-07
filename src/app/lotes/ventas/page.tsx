@@ -1,13 +1,14 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import Select from "@/components/ui/Select";
 import Link from "next/link";
 import { ArrowLeft, RefreshCw } from "lucide-react";
 import { fetchWithSupabaseSession } from "@/lib/api/fetch-with-supabase-session";
 import { ESTADO_VENTA_UI, type VentaResumen } from "@/lib/financiacion/types";
 
 const inputClass =
-  "w-full border border-slate-200 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-[#0EA5E9] focus:outline-none bg-white text-sm";
+  "w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm text-slate-800 shadow-sm outline-none transition-colors placeholder:text-slate-400 hover:border-slate-300 focus:border-[#0EA5E9] focus:ring-2 focus:ring-[#0EA5E9]/25 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400";
 
 const fmt = (v: number, moneda: string) =>
   moneda === "USD"
@@ -62,8 +63,8 @@ export default function VentasPage() {
             <ArrowLeft className="h-3.5 w-3.5" />
             Volver a Lotes
           </Link>
-          <h1 className="text-2xl font-bold text-gray-800">Contratos</h1>
-          <p className="mt-0.5 text-sm text-gray-500">Ventas financiadas de lotes, con su saldo y su mora al día.</p>
+          <h1 className="text-[26px] font-bold tracking-tight text-slate-900">Contratos</h1>
+          <p className="mt-1 text-sm text-slate-500">Ventas financiadas de lotes, con su saldo y su mora al día.</p>
         </div>
         <button
           type="button"
@@ -78,12 +79,12 @@ export default function VentasPage() {
 
       <div className="rounded-2xl border border-slate-200 bg-white p-4 sm:max-w-xs">
         <label className="mb-1 block text-xs font-medium text-slate-500">Estado</label>
-        <select value={estado} onChange={(e) => setEstado(e.target.value)} className={inputClass}>
+        <Select value={estado} onChange={(e) => setEstado(e.target.value)}>
           <option value="vigente">Vigentes</option>
           <option value="cancelada">Canceladas</option>
           <option value="anulada">Anuladas</option>
           <option value="">Todos</option>
-        </select>
+        </Select>
       </div>
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -179,9 +180,10 @@ export default function VentasPage() {
 
 function Tarjeta({ titulo, valor, tono }: { titulo: string; valor: string; tono?: "rose" }) {
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-4">
+    <div className="group relative overflow-hidden rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition-shadow hover:shadow-md">
+      <span className={`absolute inset-x-0 top-0 h-1 ${tono === "rose" ? "bg-rose-400" : "bg-[#0EA5E9]"}`} />
       <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">{titulo}</p>
-      <p className={`mt-1 text-lg font-bold tabular-nums ${tono === "rose" ? "text-rose-700" : "text-slate-900"}`}>
+      <p className={`mt-1.5 text-2xl font-bold tabular-nums tracking-tight ${tono === "rose" ? "text-rose-700" : "text-slate-900"}`}>
         {valor}
       </p>
     </div>

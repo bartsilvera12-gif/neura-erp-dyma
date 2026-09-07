@@ -5,12 +5,14 @@ import Link from "next/link";
 import { ArrowLeft, Printer, RefreshCw, X } from "lucide-react";
 import { fetchWithSupabaseSession } from "@/lib/api/fetch-with-supabase-session";
 import MontoInput from "@/components/ui/MontoInput";
+import Select from "@/components/ui/Select";
 import { FechaSelect } from "@/components/ui/FechaSelect";
 import { ESTADO_CUOTA_UI, ESTADO_VENTA_UI, type CuotaVenta, type VentaLote } from "@/lib/financiacion/types";
 
 const inputClass =
-  "w-full border border-slate-200 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-[#0EA5E9] focus:outline-none bg-white text-sm";
-const labelClass = "block text-xs font-medium text-slate-500 mb-1";
+  "w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm text-slate-800 shadow-sm outline-none transition-colors placeholder:text-slate-400 hover:border-slate-300 focus:border-[#0EA5E9] focus:ring-2 focus:ring-[#0EA5E9]/25 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400";
+const labelClass =
+  "mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500";
 
 const fmt = (v: number, moneda: string) =>
   moneda === "USD"
@@ -304,9 +306,10 @@ function Dato({ titulo, valor }: { titulo: string; valor: string }) {
 
 function Tarjeta({ titulo, valor, extra, tono }: { titulo: string; valor: string; extra?: string; tono?: "rose" }) {
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-4">
+    <div className="group relative overflow-hidden rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition-shadow hover:shadow-md">
+      <span className={`absolute inset-x-0 top-0 h-1 ${tono === "rose" ? "bg-rose-400" : "bg-[#0EA5E9]"}`} />
       <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">{titulo}</p>
-      <p className={`mt-1 text-lg font-bold tabular-nums ${tono === "rose" ? "text-rose-700" : "text-slate-900"}`}>
+      <p className={`mt-1.5 text-2xl font-bold tabular-nums tracking-tight ${tono === "rose" ? "text-rose-700" : "text-slate-900"}`}>
         {valor}
       </p>
       {extra ? <p className="mt-0.5 text-xs text-slate-500">{extra}</p> : null}
@@ -448,13 +451,13 @@ function ModalCobrar({
           </div>
           <div>
             <label className={labelClass}>Método</label>
-            <select value={metodo} onChange={(e) => setMetodo(e.target.value)} className={inputClass}>
+            <Select value={metodo} onChange={(e) => setMetodo(e.target.value)}>
               <option value="efectivo">Efectivo</option>
               <option value="transferencia">Transferencia</option>
               <option value="cheque">Cheque</option>
               <option value="tarjeta">Tarjeta</option>
               <option value="otro">Otro</option>
-            </select>
+            </Select>
           </div>
           <div>
             <label className={labelClass}>

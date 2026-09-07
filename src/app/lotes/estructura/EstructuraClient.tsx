@@ -102,8 +102,8 @@ export default function EstructuraClient() {
             <ArrowLeft className="h-3.5 w-3.5" />
             Volver a Lotes
           </Link>
-          <h1 className="text-2xl font-bold text-gray-800">Estructura del loteamiento</h1>
-          <p className="mt-0.5 text-sm text-gray-500">
+          <h1 className="text-[26px] font-bold tracking-tight text-slate-900">Estructura del loteamiento</h1>
+          <p className="mt-1 text-sm text-slate-500">
             Jerarquía sobre la que cuelgan los lotes: loteamiento → fracción → manzana.
           </p>
         </div>

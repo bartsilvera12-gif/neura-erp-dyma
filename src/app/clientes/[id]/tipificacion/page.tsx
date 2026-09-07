@@ -1,6 +1,7 @@
 "use client";
 
 import { useParams, useRouter } from "next/navigation";
+import { AlertTriangle } from "lucide-react";
 import { useEffect, useState } from "react";
 import { getCliente, clienteNombre } from "@/lib/clientes/storage";
 import { getTipificaciones, saveTipificacion } from "@/lib/gestion-clientes/storage";
@@ -244,13 +245,13 @@ export default function TipificacionPage() {
 
           {/* Aviso usuario */}
           <p className="text-xs text-gray-400 mb-4">
-            👤 Se registrará como: <span className="font-semibold text-gray-600">{USUARIO_DEFAULT}</span>
+            Se registrará como: <span className="font-semibold text-gray-600">{USUARIO_DEFAULT}</span>
           </p>
 
           {/* Error / Éxito */}
           {error && (
             <div className="flex items-center gap-2 bg-red-50 border border-red-200 rounded-lg px-4 py-3 text-sm text-red-700 mb-4">
-              <span>⚠</span><span className="font-medium">{error}</span>
+              <AlertTriangle className="h-4 w-4 shrink-0" /><span className="font-medium">{error}</span>
             </div>
           )}
 

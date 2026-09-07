@@ -6,6 +6,7 @@ import { ArrowLeft, Check, RefreshCw, Save, Trash2, Undo2 } from "lucide-react";
 import { fetchWithSupabaseSession } from "@/lib/api/fetch-with-supabase-session";
 import { getClientes } from "@/lib/clientes/storage";
 import SmartSearchSelect, { type SmartOption } from "@/components/ui/SmartSearchSelect";
+import Select from "@/components/ui/Select";
 import MontoInput from "@/components/ui/MontoInput";
 import { FechaSelect } from "@/components/ui/FechaSelect";
 import ModalVenderLote, { type CondicionesIniciales } from "../ModalVenderLote";
@@ -22,8 +23,9 @@ import type { Cliente } from "@/lib/clientes/types";
 import type { Lote } from "@/lib/lotes/types";
 
 const inputClass =
-  "w-full border border-slate-200 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-[#0EA5E9] focus:outline-none bg-white text-sm";
-const labelClass = "block text-xs font-medium text-slate-500 mb-1";
+  "w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm text-slate-800 shadow-sm outline-none transition-colors placeholder:text-slate-400 hover:border-slate-300 focus:border-[#0EA5E9] focus:ring-2 focus:ring-[#0EA5E9]/25 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400";
+const labelClass =
+  "mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500";
 
 const gs = (v: number) => `Gs. ${Math.round(v).toLocaleString("es-PY")}`;
 
@@ -243,8 +245,8 @@ export default function SimuladorClient() {
             <ArrowLeft className="h-3.5 w-3.5" />
             Volver a Lotes
           </Link>
-          <h1 className="text-2xl font-bold text-gray-800">Simulador de plan de pago</h1>
-          <p className="mt-0.5 text-sm text-gray-500">
+          <h1 className="text-[26px] font-bold tracking-tight text-slate-900">Simulador de plan de pago</h1>
+          <p className="mt-1 text-sm text-slate-500">
             Probá propuestas antes de firmar. Nada de esto genera contrato ni cuotas hasta que lo apruebes.
           </p>
         </div>
@@ -277,7 +279,7 @@ export default function SimuladorClient() {
               <label className={labelClass}>
                 Lote <span className="font-normal text-slate-400">(necesario para generar contrato)</span>
               </label>
-              <select value={loteId} onChange={(e) => setLoteId(e.target.value)} className={inputClass}>
+              <Select value={loteId} onChange={(e) => setLoteId(e.target.value)}>
                 <option value="">Sin lote</option>
                 {lotes
                   .filter((l) => l.estado === "disponible" || l.estado === "reservado" || l.id === loteId)
@@ -286,7 +288,7 @@ export default function SimuladorClient() {
                       Lote {l.numero} — {l.estado}
                     </option>
                   ))}
-              </select>
+              </Select>
             </div>
 
             <div>
@@ -387,17 +389,16 @@ export default function SimuladorClient() {
             </div>
             <div>
               <label className={labelClass}>Frecuencia</label>
-              <select
+              <Select
                 value={frecuencia}
                 onChange={(e) => setFrecuencia(e.target.value as Frecuencia)}
-                className={inputClass}
               >
                 {Object.entries(FRECUENCIAS).map(([k, f]) => (
                   <option key={k} value={k}>
                     {f.label}
                   </option>
                 ))}
-              </select>
+              </Select>
             </div>
             <div>
               <label className={labelClass}>Recargo (%)</label>

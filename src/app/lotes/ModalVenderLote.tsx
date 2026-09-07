@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { X } from "lucide-react";
 import { fetchWithSupabaseSession } from "@/lib/api/fetch-with-supabase-session";
 import SmartSearchSelect, { type SmartOption } from "@/components/ui/SmartSearchSelect";
+import Select from "@/components/ui/Select";
 import MontoInput from "@/components/ui/MontoInput";
 import { FechaSelect } from "@/components/ui/FechaSelect";
 import {
@@ -49,8 +50,9 @@ export interface CondicionesIniciales {
 }
 
 const inputClass =
-  "w-full border border-slate-200 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-[#0EA5E9] focus:outline-none bg-white text-sm";
-const labelClass = "block text-xs font-medium text-slate-500 mb-1";
+  "w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm text-slate-800 shadow-sm outline-none transition-colors placeholder:text-slate-400 hover:border-slate-300 focus:border-[#0EA5E9] focus:ring-2 focus:ring-[#0EA5E9]/25 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400";
+const labelClass =
+  "mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500";
 
 const fmt = (v: number, moneda: string) =>
   moneda === "USD"
@@ -253,14 +255,14 @@ export default function ModalVenderLote({
         <div className="mt-4 grid gap-3 sm:grid-cols-2">
           <div className="sm:col-span-2">
             <label className={labelClass}>Tipo de contrato</label>
-            <select value={tipoId} onChange={(e) => elegirTipo(e.target.value)} className={inputClass}>
+            <Select value={tipoId} onChange={(e) => elegirTipo(e.target.value)}>
               {tipos.length === 0 ? <option value="">Sin tipos configurados</option> : null}
               {tipos.map((t) => (
                 <option key={t.id} value={t.id}>
                   {t.nombre}
                 </option>
               ))}
-            </select>
+            </Select>
             {tipoElegido?.descripcion ? (
               <p className="mt-1 text-[10px] text-slate-400">{tipoElegido.descripcion}</p>
             ) : null}
@@ -312,14 +314,14 @@ export default function ModalVenderLote({
             <label className={labelClass}>
               Vendedor <span className="font-normal text-slate-400">(opcional)</span>
             </label>
-            <select value={vendedorId} onChange={(e) => elegirVendedor(e.target.value)} className={inputClass}>
+            <Select value={vendedorId} onChange={(e) => elegirVendedor(e.target.value)}>
               <option value="">Sin vendedor</option>
               {vendedores.map((v) => (
                 <option key={v.id} value={v.id}>
                   {v.codigo} — {v.nombre}
                 </option>
               ))}
-            </select>
+            </Select>
           </div>
           <div>
             <label className={labelClass}>Comisión del vendedor (%)</label>
@@ -370,17 +372,16 @@ export default function ModalVenderLote({
           </div>
           <div>
             <label className={labelClass}>Frecuencia de pago</label>
-            <select
+            <Select
               value={frecuencia}
               onChange={(e) => setFrecuencia(e.target.value as Frecuencia)}
-              className={inputClass}
             >
               {Object.entries(FRECUENCIAS).map(([k, f]) => (
                 <option key={k} value={k}>
                   {f.label}
                 </option>
               ))}
-            </select>
+            </Select>
           </div>
           <div>
             <label className={labelClass}>Cantidad de cuotas</label>

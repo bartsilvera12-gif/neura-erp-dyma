@@ -8,8 +8,9 @@ import { pctVisible } from "@/lib/vendedores/calculo-comision";
 import type { Vendedor } from "@/lib/vendedores/types";
 
 const inputClass =
-  "w-full border border-slate-200 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-[#0EA5E9] focus:outline-none bg-white text-sm";
-const labelClass = "block text-xs font-medium text-slate-500 mb-1";
+  "w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm text-slate-800 shadow-sm outline-none transition-colors placeholder:text-slate-400 hover:border-slate-300 focus:border-[#0EA5E9] focus:ring-2 focus:ring-[#0EA5E9]/25 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400";
+const labelClass =
+  "mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500";
 
 export default function VendedoresClient() {
   const [vendedores, setVendedores] = useState<Vendedor[]>([]);
@@ -81,8 +82,8 @@ export default function VendedoresClient() {
             <ArrowLeft className="h-3.5 w-3.5" />
             Volver a Lotes
           </Link>
-          <h1 className="text-2xl font-bold text-gray-800">Vendedores</h1>
-          <p className="mt-0.5 text-sm text-gray-500">
+          <h1 className="text-[26px] font-bold tracking-tight text-slate-900">Vendedores</h1>
+          <p className="mt-1 text-sm text-slate-500">
             Cada venta se asocia a un vendedor. Su comisión se liquida sobre las cuotas cobradas.
           </p>
         </div>

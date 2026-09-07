@@ -3,6 +3,31 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { motion } from "framer-motion";
+import {
+  AlertTriangle,
+  BarChart3,
+  CalendarDays,
+  CalendarRange,
+  CheckCircle2,
+  CircleDot,
+  FileText,
+  Gem,
+  Hash,
+  Home,
+  Landmark,
+  MessageSquare,
+  Package,
+  Receipt,
+  ShoppingCart,
+  Target,
+  Ticket,
+  TrendingUp,
+  Wallet,
+  Zap,
+  Lock,
+  Map as MapIcon,
+  type LucideIcon,
+} from "lucide-react";
 import { getConfig } from "@/lib/config/storage";
 import { getUsuarios } from "@/lib/usuarios/storage";
 import type { ConfigGlobal } from "@/lib/config/types";
@@ -510,10 +535,13 @@ function KpiCard({
   value: string;
   sub?: string;
   color?: string;
-  icon: string;
+  /** Icono vectorial (lucide). Antes era un emoji: se veía distinto en cada sistema
+   *  y desentonaba con el resto de la interfaz. */
+  icon: LucideIcon;
   variation?: number;
   variant?: "light" | "zentra";
 }) {
+  const Icon = icon;
   if (variant === "zentra") {
     return (
       <motion.div
@@ -522,7 +550,9 @@ function KpiCard({
         style={{ backgroundColor: Z.card }}
       >
         <div className="flex items-start justify-between gap-2">
-          <div className="text-2xl opacity-90">{icon}</div>
+          <span className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-white/10 text-white/90">
+            <Icon className="h-5 w-5" />
+          </span>
           {variation !== undefined && (
             <span
               className="inline-flex items-center gap-0.5 rounded-full px-2 py-0.5 text-xs font-semibold"
@@ -554,7 +584,9 @@ function KpiCard({
       className="rounded-2xl border border-[#4FAEB2]/30 bg-white p-6 shadow-sm ring-1 ring-[#4FAEB2]/10 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md"
     >
       <div className="flex items-start justify-between gap-2">
-        <div className="text-2xl">{icon}</div>
+        <span className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-[#4FAEB2]/10 text-[#0F766E]">
+          <Icon className="h-5 w-5" />
+        </span>
         {variation !== undefined && (
           <span
             className={`inline-flex items-center gap-0.5 rounded-full px-2 py-0.5 text-xs font-semibold ${
@@ -792,16 +824,16 @@ function DashComercial({
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <KpiCard
           variant="zentra"
-          icon="🎯"
+          icon={Target}
           label="Leads nuevos"
           value={String(leadsNuevos)}
           color="text-[#60A5FA]"
           variation={12}
         />
-        <KpiCard variant="zentra" icon="💬" label="En negociación" value={String(enNegociacion)} color="text-amber-400" />
+        <KpiCard variant="zentra" icon={MessageSquare} label="En negociación" value={String(enNegociacion)} color="text-amber-400" />
         <KpiCard
           variant="zentra"
-          icon="✅"
+          icon={CheckCircle2}
           label="Clientes ganados (CRM)"
           value={String(clientesGanados)}
           color="text-[#60A5FA]"
@@ -809,7 +841,7 @@ function DashComercial({
         />
         <KpiCard
           variant="zentra"
-          icon="📈"
+          icon={TrendingUp}
           label="Tasa de conversión"
           value={`${tasaConversion.toFixed(1)}%`}
           color={tasaConversion >= config.meta_conversion_leads ? "text-emerald-400" : "text-white"}
@@ -1690,13 +1722,13 @@ function DashVentasLotes({ periodo }: { periodo: Periodo }) {
   return (
     <div className="space-y-5">
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <KpiCard icon="🗺️" label="Lotes vendidos" value={String(delPeriodo.length)}
+        <KpiCard icon={MapIcon} label="Lotes vendidos" value={String(delPeriodo.length)}
           sub="en el período elegido" color="text-[#0EA5E9]" />
-        <KpiCard icon="💰" label="Monto vendido" value={`Gs. ${formatGsFull(totalVendido)}`}
+        <KpiCard icon={Wallet} label="Monto vendido" value={`Gs. ${formatGsFull(totalVendido)}`}
           color="text-[#0EA5E9]" />
-        <KpiCard icon="🧾" label="Venta promedio" value={`Gs. ${formatGsFull(ticket)}`}
+        <KpiCard icon={Receipt} label="Venta promedio" value={`Gs. ${formatGsFull(ticket)}`}
           color="text-[#0EA5E9]" />
-        <KpiCard icon="⚡" label="Al contado / financiadas"
+        <KpiCard icon={Zap} label="Al contado / financiadas"
           value={`${contado.length} / ${financiadas.length}`}
           sub={contado.length > 0 ? `Gs. ${formatGsFull(contado.reduce((a, v) => a + montoVenta(v), 0))} al contado` : undefined}
           color="text-emerald-600" />
@@ -1842,31 +1874,31 @@ function DashLotes() {
     <div className="space-y-5">
       {/* KPIs del stock de lotes */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <KpiCard icon="🗺️" label="Lotes totales" value={String(lotes.total)}
+        <KpiCard icon={MapIcon} label="Lotes totales" value={String(lotes.total)}
           sub={lotes.superficie_total > 0 ? `${formatGs(lotes.superficie_total)} m² en total` : undefined}
           color="text-[#0EA5E9]" />
-        <KpiCard icon="🟢" label="Disponibles" value={String(lotes.disponible)}
+        <KpiCard icon={CircleDot} label="Disponibles" value={String(lotes.disponible)}
           sub={lotes.reservado > 0 ? `${lotes.reservado} reservado(s)` : "sin reservas"}
           color="text-emerald-600" />
-        <KpiCard icon="🏠" label="Vendidos" value={String(lotes.vendido)}
+        <KpiCard icon={Home} label="Vendidos" value={String(lotes.vendido)}
           sub={`${vendidosPct}% del loteamiento`} color="text-[#0EA5E9]" />
-        <KpiCard icon="💎" label="Por vender (precio de lista)"
+        <KpiCard icon={Gem} label="Por vender (precio de lista)"
           value={`Gs. ${formatGsFull(lotes.valor_disponible)}`} color="text-[#0EA5E9]" />
       </div>
 
       {/* KPIs de la cobranza */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <KpiCard icon="📄" label="Contratos vigentes" value={String(contratos.vigentes)}
+        <KpiCard icon={FileText} label="Contratos vigentes" value={String(contratos.vigentes)}
           sub={contratos.cancelados > 0 ? `${contratos.cancelados} cancelado(s)` : undefined}
           color="text-[#0EA5E9]" />
-        <KpiCard icon="🏦" label="Saldo por cobrar"
+        <KpiCard icon={Landmark} label="Saldo por cobrar"
           value={`Gs. ${formatGsFull(cartera.saldo_por_cobrar)}`}
           sub={`${cartera.cuotas_pendientes} cuota(s) pendiente(s)`} color="text-[#0EA5E9]" />
-        <KpiCard icon="⚠️" label="Mora acumulada"
+        <KpiCard icon={AlertTriangle} label="Mora acumulada"
           value={`Gs. ${formatGsFull(cartera.mora_acumulada)}`}
           sub={cartera.cuotas_vencidas > 0 ? `${cartera.cuotas_vencidas} cuota(s) vencida(s)` : "todo al día"}
           color={cartera.mora_acumulada > 0 ? "text-red-600" : "text-emerald-600"} />
-        <KpiCard icon="💰" label="Cobrado este mes"
+        <KpiCard icon={Wallet} label="Cobrado este mes"
           value={`Gs. ${formatGsFull(cartera.cobrado_mes)}`}
           sub={`${cartera.cobros_mes} cobro(s)`} color="text-emerald-600" />
       </div>
@@ -1976,13 +2008,13 @@ function DashInventario({
 
       {/* KPIs */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <KpiCard icon="📦" label="Productos totales"      value={String(totalProductos)} color="text-[#0EA5E9]" variation={4} />
-        <KpiCard icon="🔢" label="Stock total (unidades)" value={formatGs(totalUnidades)} color="text-[#0EA5E9]" />
-        <KpiCard icon="⚠️" label="Bajo stock mínimo"      value={String(bajosStock)}
+        <KpiCard icon={Package} label="Productos totales"      value={String(totalProductos)} color="text-[#0EA5E9]" variation={4} />
+        <KpiCard icon={Hash} label="Stock total (unidades)" value={formatGs(totalUnidades)} color="text-[#0EA5E9]" />
+        <KpiCard icon={AlertTriangle} label="Bajo stock mínimo"      value={String(bajosStock)}
           sub={bajosStock > 0 ? "requieren reposición" : "todo en orden"}
           color={bajosStock > 0 ? "text-red-600" : "text-[#0EA5E9]"}
           variation={bajosStock > 0 ? -2 : undefined} />
-        <KpiCard icon="💎" label="Valor del inventario"   value={`Gs. ${formatGsFull(valorTotal)}`} color="text-[#0EA5E9]" variation={12} />
+        <KpiCard icon={Gem} label="Valor del inventario"   value={`Gs. ${formatGsFull(valorTotal)}`} color="text-[#0EA5E9]" variation={12} />
       </div>
 
       {/* Donut + Críticos */}
@@ -2005,7 +2037,7 @@ function DashInventario({
           </h3>
           {criticos.length === 0 ? (
             <div className="flex items-center gap-2 text-[var(--badge-success-text)] bg-[var(--badge-success-bg)] rounded-lg px-4 py-3 text-sm">
-              <span>✅</span> Todos los productos tienen stock suficiente.
+              <CheckCircle2 className="h-4 w-4 shrink-0" /> Todos los productos tienen stock suficiente.
             </div>
           ) : (
             <div className="overflow-hidden rounded-lg border border-slate-200">
@@ -2255,20 +2287,20 @@ function DashVentas({
 
       {/* KPIs principales */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <KpiCard icon="📅" label="Ventas del día"    value={`Gs. ${formatGsFull(totalHoy)}`}
+        <KpiCard icon={CalendarDays} label="Ventas del día"    value={`Gs. ${formatGsFull(totalHoy)}`}
           sub={`${ventasHoy.length} transacciones`} color="text-blue-600" />
-        <KpiCard icon="📆" label="Ventas del mes"    value={`Gs. ${formatGsFull(totalMes)}`}
+        <KpiCard icon={CalendarRange} label="Ventas del mes"    value={`Gs. ${formatGsFull(totalMes)}`}
           sub={`${ventasMes.length} transacciones`} color="text-indigo-600" />
-        <KpiCard icon="🎫" label="Ticket promedio"   value={`Gs. ${formatGsFull(ticketProm)}`}
+        <KpiCard icon={Ticket} label="Ticket promedio"   value={`Gs. ${formatGsFull(ticketProm)}`}
           sub={`periodo: ${periodo}`} />
-        <KpiCard icon="📦" label="Unidades vendidas" value={formatGs(unidades)}
+        <KpiCard icon={Package} label="Unidades vendidas" value={formatGs(unidades)}
           sub={`en el periodo`} />
       </div>
 
       {/* KPIs rentabilidad */}
       <div className="grid grid-cols-2 gap-4">
         <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5 flex items-start gap-3">
-          <span className="text-2xl">💰</span>
+          <Wallet className="h-6 w-6" aria-hidden />
           <div>
             <p className={`text-2xl font-bold tabular-nums ${gananciaHoy >= 0 ? "text-green-600" : "text-red-600"}`}>
               Gs. {formatGsFull(gananciaHoy)}
@@ -2278,7 +2310,7 @@ function DashVentas({
           </div>
         </div>
         <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5 flex items-start gap-3">
-          <span className="text-2xl">📊</span>
+          <BarChart3 className="h-6 w-6" aria-hidden />
           <div>
             <p className={`text-2xl font-bold tabular-nums ${margenProm >= 20 ? "text-green-600" : margenProm >= 10 ? "text-amber-600" : "text-red-600"}`}>
               {margenProm.toFixed(1)}%
@@ -2517,12 +2549,12 @@ export default function DashboardPage() {
     }
   }, [tab, effectiveTabs]);
 
-  const TAB_META: Record<TabDash, { label: string; icon: string }> = {
-    comercial: { label: "Comercial", icon: "📊" },
-    financiero: { label: "Financiero", icon: "💰" },
-    inventario: { label: "Inventario", icon: "📦" },
-    lotes: { label: "Lotes", icon: "🗺️" },
-    ventas: { label: "Ventas", icon: "🛒" },
+  const TAB_META: Record<TabDash, { label: string; icon: LucideIcon }> = {
+    comercial: { label: "Comercial", icon: BarChart3 },
+    financiero: { label: "Financiero", icon: Wallet },
+    inventario: { label: "Inventario", icon: Package },
+    lotes: { label: "Lotes", icon: MapIcon },
+    ventas: { label: "Ventas", icon: ShoppingCart },
   };
 
   if (!config) {
@@ -2540,7 +2572,7 @@ export default function DashboardPage() {
   if (nivel === "usuario") {
     return (
       <div className="flex flex-col items-center justify-center py-24 gap-4">
-        <span className="text-4xl">🔒</span>
+        <Lock className="h-9 w-9 text-slate-400" aria-hidden />
         <h2 className="text-lg font-bold text-gray-800">Acceso restringido</h2>
         <p className="text-sm text-gray-500 text-center max-w-sm">
           El dashboard solo está disponible para usuarios con nivel <strong>Supervisor</strong> o <strong>Administrador</strong>.
@@ -2682,7 +2714,7 @@ export default function DashboardPage() {
                     : { color: Z.muted }
                 }
               >
-                <span aria-hidden>{meta.icon}</span>
+                <meta.icon className="h-4 w-4" aria-hidden />
                 {meta.label}
               </button>
             );

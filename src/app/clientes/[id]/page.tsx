@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { AlertTriangle, Clock, FolderOpen } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
@@ -110,7 +111,7 @@ function formatFechaHora(iso: string) {
 
 // ── Placeholder para pestañas futuras ─────────────────────────────────────────
 
-function PlaceholderTab({ icon, title, desc }: { icon: string; title: string; desc: string }) {
+function PlaceholderTab({ icon, title, desc }: { icon: ReactNode; title: string; desc: string }) {
   return (
     <div className="flex flex-col items-center justify-center py-20 text-center">
       <span className="text-5xl mb-4">{icon}</span>
@@ -1950,7 +1951,7 @@ export default function ClienteDetailPage() {
 
               {formError && (
                 <div className="flex items-center gap-2 bg-red-50 border border-red-200 rounded-lg px-4 py-3 text-sm text-red-700">
-                  <span>⚠</span><span className="font-medium">{formError}</span>
+                  <AlertTriangle className="h-4 w-4 shrink-0" /><span className="font-medium">{formError}</span>
                 </div>
               )}
 
@@ -2192,7 +2193,7 @@ export default function ClienteDetailPage() {
           {/* ── PROYECTOS ────────────────────────────────────────────────── */}
           {activeTab === "proyectos" && (
             <PlaceholderTab
-              icon="📁"
+              icon={<FolderOpen className="h-4 w-4" />}
               title="Proyectos"
               desc="Proyectos en curso y finalizados asociados a este cliente, con etapas y responsables."
             />
@@ -2201,7 +2202,7 @@ export default function ClienteDetailPage() {
           {/* ── ACTIVIDAD ────────────────────────────────────────────────── */}
           {activeTab === "actividad" && (
             <PlaceholderTab
-              icon="🕐"
+              icon={<Clock className="h-4 w-4" />}
               title="Actividad"
               desc="Timeline completo de interacciones, cambios de estado, ventas y eventos del cliente."
             />

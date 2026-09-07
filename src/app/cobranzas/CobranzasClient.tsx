@@ -2,7 +2,16 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { RefreshCw, Search, X, ChevronRight, ExternalLink } from "lucide-react";
+import {
+  RefreshCw,
+  Search,
+  X,
+  ChevronDown,
+  ChevronRight,
+  ChevronUp,
+  ChevronsUpDown,
+  ExternalLink,
+} from "lucide-react";
 import { fetchWithSupabaseSession } from "@/lib/api/fetch-with-supabase-session";
 import { FechaSelect } from "@/components/ui/FechaSelect";
 
@@ -641,7 +650,11 @@ export default function CobranzasClient() {
                           >
                             {col.h}
                             <span className={`text-[9px] leading-none ${active ? "opacity-100" : "opacity-25"}`}>
-                              {active ? (sort!.dir === "asc" ? "▲" : "▼") : "↕"}
+                              {active ? (
+          sort!.dir === "asc" ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />
+        ) : (
+          <ChevronsUpDown className="h-3.5 w-3.5 opacity-50" />
+        )}
                             </span>
                           </button>
                         ) : (
