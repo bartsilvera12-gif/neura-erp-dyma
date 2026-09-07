@@ -50,7 +50,6 @@ export async function GET(request: NextRequest, ctxParams: { params: Promise<{ n
 
   const cab = filas[0] as unknown as Record<string, unknown>;
   const url = new URL(request.url);
-  const origin = `${url.protocol}//${url.host}`;
   const auto = url.searchParams.get("auto") === "1";
 
   const subtotal = filas.reduce((s, l) => s + (Number(l.subtotal) || 0), 0);
@@ -113,7 +112,7 @@ export async function GET(request: NextRequest, ctxParams: { params: Promise<{ n
   @media print{body{padding:0}.noprint{display:none}}
 </style></head>
 <body><div class="wrap">
-  ${membreteA4(origin)}
+  ${membreteA4()}
 
   <div class="head">
     <div>

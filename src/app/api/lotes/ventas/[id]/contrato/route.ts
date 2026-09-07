@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireLotesModuleAccess } from "@/lib/lotes/lotes-auth";
 import { plantillaCompraventaPlazos } from "@/lib/contratos/plantilla-compraventa";
+import { leerLogoInstancia } from "@/lib/documentos/logo-instancia";
 import type {
   ContratoConfig,
   CuotaContrato,
@@ -14,6 +15,23 @@ export const dynamic = "force-dynamic";
 
 function ymd(v: unknown): string {
   return String(v ?? "").slice(0, 10);
+}
+
+/**
+ * Logo incrustado en el propio documento, no linkeado.
+ *
+ * Antes se apuntaba a /api/brand/logo con una URL absoluta armada desde
+ * `request.url`. Detrás del proxy eso resuelve al origen interno
+ * (localhost), que el navegador del usuario no puede alcanzar: la imagen
+ * salía rota. Incrustarla ademas deja el contrato autocontenido, que es lo
+ * que corresponde a algo que se imprime, se guarda como PDF o se manda por
+ * correo.
+ */
+function logoIncrustado(): string | undefined {
+  const logo = leerLogoInstancia();
+  if (!logo) return undefined;
+  const tipo = logo.tipo === "png" ? "image/png" : "image/jpeg";
+  return `data:${tipo};base64,${Buffer.from(logo.bytes).toString("base64")}`;
 }
 
 /** Nombre visible del cliente: razón social si es empresa, si no el contacto. */
@@ -186,8 +204,7 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
 
     const datos: DatosContrato = {
       cuotas,
-      // Mismo logo que el resto de los documentos; el servidor resuelve el formato.
-      logoUrl: new URL("/api/brand/logo", request.url).toString(),
+      logoUrl: logoIncrustado(),
       config,
       tipo,
       comprador,
