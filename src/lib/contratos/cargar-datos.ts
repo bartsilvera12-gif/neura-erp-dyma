@@ -31,7 +31,7 @@ function nombreCliente(c: Record<string, unknown> | null): string {
  * que es lo que corresponde a algo que se imprime, se guarda como PDF o se
  * manda por correo.
  */
-function logoIncrustado(): string | undefined {
+export function logoIncrustado(): string | undefined {
   const logo = leerLogoInstancia();
   if (!logo) return undefined;
   const tipo = logo.tipo === "png" ? "image/png" : "image/jpeg";

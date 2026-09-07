@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { AlertTriangle, Clock, FolderOpen } from "lucide-react";
+import DocumentosCliente from "@/components/clientes/DocumentosCliente";
 import { useParams, useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
@@ -1969,6 +1970,8 @@ export default function ClienteDetailPage() {
           {/* ── ESTADO DE CUENTA ─────────────────────────────────────────── */}
           {activeTab === "estado_cuenta" && (
             <div className="space-y-4">
+              <DocumentosCliente clienteId={id} />
+
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <SectionTitle>Facturas del cliente</SectionTitle>
                 <div className="flex flex-wrap gap-2">
