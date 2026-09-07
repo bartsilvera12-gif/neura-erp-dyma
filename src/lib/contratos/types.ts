@@ -93,8 +93,21 @@ export interface OperacionContrato {
   primer_vencimiento: string;
 }
 
+/** Una cuota del plan, como se transcribe en el anexo del contrato. */
+export interface CuotaContrato {
+  numero: number;
+  vencimiento: string;
+  capital: number;
+  interes: number;
+  total: number;
+}
+
 /** Todo lo que necesita la plantilla para armar el documento. */
 export interface DatosContrato {
+  /** Plan de pago completo. Va como anexo firmado junto al contrato. */
+  cuotas: CuotaContrato[];
+  /** URL del logo de la empresa; vacío = el documento sale sin membrete. */
+  logoUrl?: string;
   config: ContratoConfig;
   tipo: ContratoTipo | null;
   comprador: PersonaContrato;

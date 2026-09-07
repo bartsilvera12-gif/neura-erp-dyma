@@ -54,7 +54,7 @@ function filaDato(label: string, valor: unknown): string {
 }
 
 export function plantillaCompraventaPlazos(datos: DatosContrato, opciones?: { autoImprimir?: boolean }): string {
-  const { config, comprador, conyuge, codeudores, inmueble, operacion } = datos;
+  const { config, comprador, conyuge, codeudores, inmueble, operacion, cuotas } = datos;
 
   const compradores = [comprador, ...(conyuge ? [conyuge] : [])];
   const plural = compradores.length > 1;
@@ -118,6 +118,49 @@ export function plantillaCompraventaPlazos(datos: DatosContrato, opciones?: { au
     )
     .join("");
 
+  /**
+   * Anexo con el plan de pago. Va como parte del contrato, con su propia firma:
+   * es el detalle de lo que la Cláusula Tercera enuncia en una sola línea, y el
+   * comprador se lleva el cuadro de vencimientos que firmó.
+   */
+  const anexoCuotas =
+    cuotas.length === 0
+      ? ""
+      : `<div class="anexo">
+  <h3>Anexo — Plan de pago</h3>
+  <p>Detalle de las ${cuotas.length} cuotas pactadas en la Cláusula Tercera. Forma parte del presente contrato.</p>
+  <table class="cuotas">
+    <thead>
+      <tr>
+        <th>Cuota</th><th>Vencimiento</th><th>Capital</th><th>Recargo</th><th>Importe</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${cuotas
+        .map(
+          (c) => `<tr>
+        <td class="c">${c.numero}</td>
+        <td class="c">${fmtFecha(c.vencimiento)}</td>
+        <td>${gs(c.capital)}</td>
+        <td>${gs(c.interes)}</td>
+        <td>${gs(c.total)}</td>
+      </tr>`
+        )
+        .join("")}
+    </tbody>
+    <tfoot>
+      <tr>
+        <td class="c" colspan="2">Total</td>
+        <td>${gs(cuotas.reduce((a, c) => a + c.capital, 0))}</td>
+        <td>${gs(cuotas.reduce((a, c) => a + c.interes, 0))}</td>
+        <td>${gs(cuotas.reduce((a, c) => a + c.total, 0))}</td>
+      </tr>
+    </tfoot>
+  </table>
+  <div class="firmas">${firmasHtml}</div>
+</div>`;
+
+
   return `<!doctype html>
 <html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>${esc(operacion.numero_contrato)} — Contrato de compraventa</title>
@@ -137,12 +180,41 @@ export function plantillaCompraventaPlazos(datos: DatosContrato, opciones?: { au
   .firma .linea{border-top:1px solid #111827;margin-bottom:6px}
   .firma .rol{font-size:9.5pt;font-weight:700}
   .firma .pie{font-size:9.5pt;color:#4b5563}
+  .membrete{display:flex;justify-content:space-between;align-items:flex-start;gap:18px;border-bottom:2px solid #111827;padding-bottom:10px;margin-bottom:16px}
+  .membrete .logo{max-width:200px;max-height:80px;width:auto;height:auto;object-fit:contain;display:block}
+  .membrete .logo-txt{font-size:16pt;font-weight:700;letter-spacing:.02em}
+  .membrete-datos{text-align:right;font-size:9.5pt;line-height:1.45;color:#374151}
+  .membrete-datos .razon{font-weight:700;color:#111827}
+  .anexo{margin-top:34px}
+  .anexo h3{margin-top:0}
+  table.cuotas{width:100%;border-collapse:collapse;font-size:9.5pt}
+  table.cuotas th,table.cuotas td{border:1px solid #9ca3af;padding:4px 6px}
+  table.cuotas th{background:#f3f4f6;font-weight:700;text-align:center}
+  table.cuotas td{text-align:right}
+  table.cuotas td.c{text-align:center}
+  table.cuotas tfoot td{background:#f9fafb;font-weight:700}
+  table.cuotas tr{break-inside:avoid}
   .toolbar{max-width:210mm;margin:12px auto;text-align:right}
   .toolbar button{font-family:system-ui,sans-serif;font-size:13px;padding:8px 16px;border-radius:8px;border:1px solid #0EA5E9;background:#0EA5E9;color:#fff;cursor:pointer}
-  @media print{ body{background:#fff} .toolbar{display:none} .page{width:auto;padding:0;margin:0} @page{size:A4;margin:18mm} }
+  @media print{
+    body{background:#fff} .toolbar{display:none} .page{width:auto;padding:0;margin:0}
+    .anexo{break-before:page}
+    thead{display:table-header-group}
+    @page{size:A4;margin:18mm}
+  }
 </style></head><body>
 <div class="toolbar"><button onclick="window.print()">Imprimir / Guardar PDF</button></div>
 <div class="page">
+
+<div class="membrete">
+  ${datos.logoUrl ? `<img class="logo" src="${esc(datos.logoUrl)}" alt="${esc(config.razon_social)}" />` : `<div class="logo-txt">${esc(config.razon_social)}</div>`}
+  <div class="membrete-datos">
+    <div class="razon">${esc(config.razon_social)}</div>
+    ${config.ruc ? `<div>RUC ${esc(config.ruc)}</div>` : ""}
+    ${config.domicilio ? `<div>${esc(config.domicilio)}</div>` : ""}
+    ${config.ciudad_firma ? `<div>${esc(config.ciudad_firma)}${config.departamento ? `, ${esc(config.departamento)}` : ""}</div>` : ""}
+  </div>
+</div>
 
 <h1>Contrato de Compraventa de Inmueble a Plazos</h1>
 <div class="contrato-num">${esc(operacion.numero_contrato)}${
@@ -333,6 +405,8 @@ ${clausulaCodeudor}
 lugar y fecha indicados en el encabezamiento, quedando un ejemplar en poder de cada parte.</p>
 
 <div class="firmas">${firmasHtml}</div>
+
+${anexoCuotas}
 
 </div>
 <script>try{ if (${opciones?.autoImprimir ? "true" : "false"}) window.print(); }catch(e){}</script>

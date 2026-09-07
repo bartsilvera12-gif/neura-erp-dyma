@@ -3,6 +3,7 @@ import { requireLotesModuleAccess } from "@/lib/lotes/lotes-auth";
 import { plantillaCompraventaPlazos } from "@/lib/contratos/plantilla-compraventa";
 import type {
   ContratoConfig,
+  CuotaContrato,
   ContratoTipo,
   DatosContrato,
   InmuebleContrato,
@@ -166,18 +167,27 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
     const financiado = Number(v.monto_financiado ?? 0);
     const cantidad = Number(v.cantidad_cuotas ?? 0);
 
-    // La cuota que se transcribe es la pareja del plan. La última puede diferir
-    // en unos guaraníes por el redondeo; se lee del plan real, no se recalcula.
-    const { data: primeraCuota } = await sb
+    // El plan real, no uno recalculado: el anexo tiene que decir exactamente lo
+    // que el comprador va a pagar, incluida la última cuota con su redondeo.
+    const { data: cuotasRaw } = await sb
       .from("lote_venta_cuotas")
-      .select("total")
+      .select("numero, vencimiento, capital, interes, total")
       .eq("venta_id", id)
       .eq("empresa_id", empresaId)
-      .order("numero")
-      .limit(1)
-      .maybeSingle();
+      .order("numero");
+
+    const cuotas: CuotaContrato[] = ((cuotasRaw ?? []) as Record<string, unknown>[]).map((c) => ({
+      numero: Number(c.numero ?? 0),
+      vencimiento: ymd(c.vencimiento),
+      capital: Number(c.capital ?? 0),
+      interes: Number(c.interes ?? 0),
+      total: Number(c.total ?? 0),
+    }));
 
     const datos: DatosContrato = {
+      cuotas,
+      // Mismo logo que el resto de los documentos; el servidor resuelve el formato.
+      logoUrl: new URL("/api/brand/logo", request.url).toString(),
       config,
       tipo,
       comprador,
@@ -193,7 +203,7 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
         entrega_inicial: entrega,
         monto_financiado: financiado,
         cantidad_cuotas: cantidad,
-        cuota: Number((primeraCuota as { total?: number } | null)?.total ?? 0),
+        cuota: cuotas[0]?.total ?? 0,
         primer_vencimiento: ymd(v.primer_vencimiento),
       },
     };
