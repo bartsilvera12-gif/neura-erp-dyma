@@ -91,9 +91,15 @@ export interface VentaResumen {
   cliente_id: string;
   cliente_label: string;
   monto_financiado: number;
+  /** Precio de lista y entrega: el dashboard necesita el monto realmente vendido. */
+  precio_contado: number;
+  entrega_inicial: number;
   cantidad_cuotas: number;
   moneda: string;
   estado: EstadoVenta;
+  modalidad: "financiada" | "contado";
+  vendedor_id: string | null;
+  vendedor_label: string | null;
   cuotas_pagadas: number;
   cuotas_vencidas: number;
   saldo: number;

@@ -34,6 +34,7 @@ import {
 } from "@/lib/fechas/calendario";
 import { fetchWithSupabaseSession } from "@/lib/api/fetch-with-supabase-session";
 import type { PanelLotes } from "@/lib/lotes/panel-types";
+import type { VentaResumen } from "@/lib/financiacion/types";
 import { etiquetaVisibleTipoServicio } from "@/lib/clientes/tipo-servicio-catalogo";
 import { useMapNombreTipoServicioCatalogo } from "@/lib/clientes/use-map-nombre-tipo-servicio";
 import { getEtapas, getEtapaClasses, normalizeEtapaCodigo, type EtapaCrm } from "@/lib/crm/etapas";
@@ -1612,6 +1613,179 @@ function DashFinanciero({
   );
 }
 
+// ── Dashboard Ventas (de lotes) ───────────────────────────────────────────────
+
+/**
+ * Ventas del período, leídas de los contratos de lotes.
+ *
+ * En esta instancia lo que se vende son lotes, no productos de inventario: el
+ * dashboard tiene que mirar `lote_ventas`. El monto de una venta es lo que el
+ * comprador termina pagando (entrega + saldo financiado), no solo lo financiado.
+ * Las anuladas no cuentan como venta.
+ */
+function DashVentasLotes({ periodo }: { periodo: Periodo }) {
+  const [ventas, setVentas] = useState<VentaResumen[]>([]);
+  const [cargando, setCargando] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const cargar = useCallback(async () => {
+    setCargando(true);
+    setError(null);
+    try {
+      const res = await fetchWithSupabaseSession("/api/lotes/ventas", { cache: "no-store" });
+      const json = (await res.json()) as { success?: boolean; error?: string; data?: { ventas: VentaResumen[] } };
+      if (!res.ok || json.success !== true || !json.data) throw new Error(json.error ?? `Error ${res.status}`);
+      setVentas(json.data.ventas);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "No se pudieron cargar las ventas de lotes");
+      setVentas([]);
+    } finally {
+      setCargando(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void cargar();
+  }, [cargar]);
+
+  const { desde, hasta } = useMemo(() => getRango(periodo), [periodo]);
+
+  /** Lo que el comprador paga en total por el lote. */
+  const montoVenta = (v: VentaResumen) => v.entrega_inicial + v.monto_financiado;
+
+  const delPeriodo = useMemo(
+    () => ventas.filter((v) => v.estado !== "anulada" && enRango(v.fecha_venta, desde, hasta)),
+    [ventas, desde, hasta]
+  );
+
+  const totalVendido = delPeriodo.reduce((a, v) => a + montoVenta(v), 0);
+  const contado = delPeriodo.filter((v) => v.modalidad === "contado");
+  const financiadas = delPeriodo.filter((v) => v.modalidad === "financiada");
+  const ticket = delPeriodo.length > 0 ? Math.round(totalVendido / delPeriodo.length) : 0;
+
+  const porVendedor = useMemo(() => {
+    const map = new Map<string, { nombre: string; ventas: number; monto: number }>();
+    for (const v of delPeriodo) {
+      const clave = v.vendedor_id ?? "__sin__";
+      const nombre = v.vendedor_label ?? "Sin vendedor asignado";
+      const g = map.get(clave) ?? { nombre, ventas: 0, monto: 0 };
+      g.ventas += 1;
+      g.monto += montoVenta(v);
+      map.set(clave, g);
+    }
+    return [...map.values()].sort((a, b) => b.monto - a.monto);
+  }, [delPeriodo]);
+
+  if (cargando) {
+    return (
+      <div className="rounded-xl border border-slate-200 bg-white px-6 py-16 text-center text-sm text-slate-400">
+        Cargando ventas de lotes…
+      </div>
+    );
+  }
+  if (error) {
+    return <div className="rounded-xl border border-rose-200 bg-rose-50 px-6 py-4 text-sm text-rose-700">{error}</div>;
+  }
+
+  return (
+    <div className="space-y-5">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <KpiCard icon="🗺️" label="Lotes vendidos" value={String(delPeriodo.length)}
+          sub="en el período elegido" color="text-[#0EA5E9]" />
+        <KpiCard icon="💰" label="Monto vendido" value={`Gs. ${formatGsFull(totalVendido)}`}
+          color="text-[#0EA5E9]" />
+        <KpiCard icon="🧾" label="Venta promedio" value={`Gs. ${formatGsFull(ticket)}`}
+          color="text-[#0EA5E9]" />
+        <KpiCard icon="⚡" label="Al contado / financiadas"
+          value={`${contado.length} / ${financiadas.length}`}
+          sub={contado.length > 0 ? `Gs. ${formatGsFull(contado.reduce((a, v) => a + montoVenta(v), 0))} al contado` : undefined}
+          color="text-emerald-600" />
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+        <motion.div whileHover={{ y: -2 }} className="bg-white border border-slate-200 rounded-xl shadow-sm hover:shadow-md transition-all duration-200 p-6">
+          <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-4">Ventas por vendedor</h3>
+          {porVendedor.length === 0 ? (
+            <p className="text-sm text-slate-400">Sin ventas en el período.</p>
+          ) : (
+            <div className="space-y-2.5">
+              {porVendedor.map((v) => (
+                <div key={v.nombre} className="border-b border-slate-100 pb-2 last:border-0">
+                  <div className="flex items-baseline justify-between gap-3">
+                    <span className="truncate text-sm text-slate-700">{v.nombre}</span>
+                    <span className="shrink-0 text-sm font-bold tabular-nums text-slate-900">
+                      Gs. {formatGsFull(v.monto)}
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-slate-400">{v.ventas} venta(s)</p>
+                </div>
+              ))}
+            </div>
+          )}
+        </motion.div>
+
+        <motion.div whileHover={{ y: -2 }} className="lg:col-span-2 bg-white border border-slate-200 rounded-xl shadow-sm hover:shadow-md transition-all duration-200 p-6">
+          <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-4">Ventas del período</h3>
+          {delPeriodo.length === 0 ? (
+            <div className="rounded-lg bg-slate-50 px-4 py-3 text-sm text-slate-500">
+              No hubo ventas de lotes en el período. Vendé uno desde <Link href="/lotes" className="font-semibold text-[#0EA5E9] hover:underline">Lotes</Link>.
+            </div>
+          ) : (
+            <div className="overflow-x-auto rounded-lg border border-slate-200">
+              <table className="w-full text-sm">
+                <thead className="border-b border-slate-200 bg-slate-50">
+                  <tr className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                    <th className="px-4 py-2.5 text-left">Contrato</th>
+                    <th className="px-4 py-2.5 text-left">Fecha</th>
+                    <th className="px-4 py-2.5 text-left">Lote</th>
+                    <th className="px-4 py-2.5 text-left">Cliente</th>
+                    <th className="px-4 py-2.5 text-left">Modalidad</th>
+                    <th className="px-4 py-2.5 text-right">Monto</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {delPeriodo.slice(0, 12).map((v) => (
+                    <tr key={v.id} className="hover:bg-slate-50/60">
+                      <td className="px-4 py-2.5">
+                        <Link href={`/lotes/ventas/${v.id}`} className="font-medium text-slate-900 hover:text-[#0EA5E9] hover:underline">
+                          {v.numero_contrato}
+                        </Link>
+                      </td>
+                      <td className="whitespace-nowrap px-4 py-2.5 tabular-nums text-slate-600">
+                        {v.fecha_venta.split("-").reverse().join("/")}
+                      </td>
+                      <td className="px-4 py-2.5 text-slate-600">{v.lote_label}</td>
+                      <td className="px-4 py-2.5 text-slate-600">{v.cliente_label}</td>
+                      <td className="px-4 py-2.5">
+                        <span className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold ${
+                          v.modalidad === "contado"
+                            ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                            : "border-sky-200 bg-sky-50 text-sky-700"
+                        }`}>
+                          {v.modalidad === "contado" ? "Contado" : `${v.cantidad_cuotas} cuotas`}
+                        </span>
+                      </td>
+                      <td className="px-4 py-2.5 text-right font-semibold tabular-nums text-slate-900">
+                        Gs. {formatGsFull(montoVenta(v))}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {delPeriodo.length > 12 ? (
+                <p className="border-t border-slate-100 px-4 py-2 text-[11px] text-slate-400">
+                  Se muestran 12 de {delPeriodo.length}. El listado completo está en{" "}
+                  <Link href="/lotes/ventas" className="font-semibold text-[#0EA5E9] hover:underline">Contratos</Link>.
+                </p>
+              ) : null}
+            </div>
+          )}
+        </motion.div>
+      </div>
+    </div>
+  );
+}
+
 // ── Dashboard Lotes ───────────────────────────────────────────────────────────
 
 /**
@@ -1985,8 +2159,11 @@ function DashInventario({
   );
 }
 
-// ── Dashboard Ventas ──────────────────────────────────────────────────────────
+// ── Dashboard Ventas (productos de inventario) ────────────────────────────────
+// Queda para otras instancias del mismo ERP que sí venden productos. En DYMA la
+// pestaña Ventas la sirve DashVentasLotes: acá lo que se vende son lotes.
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 function DashVentas({
   ventas,
   productos,
@@ -2550,13 +2727,7 @@ export default function DashboardPage() {
         />
       )}
 
-      {tab === "ventas" && (
-        <DashVentas
-          ventas={ventas}
-          productos={productos}
-          periodo={periodo}
-        />
-      )}
+      {tab === "ventas" && <DashVentasLotes periodo={periodo} />}
 
     </div>
   );

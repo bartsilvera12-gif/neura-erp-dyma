@@ -7,7 +7,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   LayoutDashboard,
-  ShoppingCart,
   Users,
   FileText,
   Building2,
@@ -92,7 +91,6 @@ const MENU_STRUCTURE: MenuItem[] = [
       { label: "Estructura", href: "/lotes/estructura" },
     ],
   },
-  { key: "ventas", slug: "ventas", label: "Ventas", href: "/ventas", icon: ShoppingCart },
   { key: "gestion-clientes", slug: "gestion-clientes", label: "Gestión Clientes", href: "/gestion-clientes", icon: Users },
   { key: "clientes", slug: "clientes", label: "Clientes", href: "/clientes", icon: Users },
   { key: "pagos", slug: "pagos", label: "Pagos", href: "/pagos", icon: Banknote },
@@ -109,7 +107,7 @@ const MENU_STRUCTURE: MenuItem[] = [
  */
 const MENU_FAMILIES: { id: string; titulo: string; keys: string[] }[] = [
   { id: "inicio", titulo: "Inicio", keys: ["dashboard", "gerencia"] },
-  { id: "comercial", titulo: "Comercial", keys: ["lotes", "ventas", "gestion-clientes", "clientes", "planes", "limpieza"] },
+  { id: "comercial", titulo: "Comercial", keys: ["lotes", "gestion-clientes", "clientes", "planes", "limpieza"] },
   { id: "cobranzas", titulo: "Cobranzas", keys: ["pagos", "cobranzas"] },
   { id: "reportes", titulo: "Reportes", keys: ["reportes"] },
 ];

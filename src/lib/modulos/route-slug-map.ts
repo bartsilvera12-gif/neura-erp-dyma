@@ -8,7 +8,6 @@ const SIDEBAR_SLUG_HREF_ORDER: { slug: string; href: string }[] = [
   { slug: "dashboard", href: "/" },
   { slug: "gerencia", href: "/dashboard/gerencia" },
   { slug: "lotes", href: "/lotes" },
-  { slug: "ventas", href: "/ventas" },
   { slug: "gestion-clientes", href: "/gestion-clientes" },
   { slug: "clientes", href: "/clientes" },
   { slug: "pagos", href: "/pagos" },

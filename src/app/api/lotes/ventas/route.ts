@@ -89,8 +89,11 @@ export async function GET(request: Request) {
     const ventaIds = ventas.map((v) => String(v.id));
     const clienteIds = [...new Set(ventas.map((v) => String(v.cliente_id)))];
     const loteIds = [...new Set(ventas.map((v) => String(v.lote_id)))];
+    const vendedorIds = [
+      ...new Set(ventas.map((v) => (v.vendedor_id ? String(v.vendedor_id) : "")).filter(Boolean)),
+    ];
 
-    const [cuotasRes, clientesRes, lotesRes] = await Promise.all([
+    const [cuotasRes, clientesRes, lotesRes, vendedoresRes] = await Promise.all([
       sb
         .from("lote_venta_cuotas")
         .select("venta_id, total, saldo, estado, vencimiento")
@@ -98,6 +101,9 @@ export async function GET(request: Request) {
         .in("venta_id", ventaIds),
       sb.from("clientes").select("id, empresa, nombre_contacto, nombre").in("id", clienteIds),
       sb.from("lotes").select("id, numero").in("id", loteIds),
+      vendedorIds.length
+        ? sb.from("vendedores").select("id, codigo, nombre").in("id", vendedorIds)
+        : Promise.resolve({ data: [] }),
     ]);
     if (cuotasRes.error) throw new Error(cuotasRes.error.message);
 
@@ -109,6 +115,10 @@ export async function GET(request: Request) {
     const etiquetaLote: Record<string, string> = {};
     for (const l of (lotesRes.data ?? []) as Record<string, string>[]) {
       etiquetaLote[l.id] = `Lote ${l.numero}`;
+    }
+    const etiquetaVendedor: Record<string, string> = {};
+    for (const v of (vendedoresRes.data ?? []) as Record<string, string>[]) {
+      etiquetaVendedor[v.id] = `${v.codigo} — ${v.nombre}`;
     }
 
     const hoy = hoyAsuncion();
@@ -141,9 +151,14 @@ export async function GET(request: Request) {
         cliente_id: String(v.cliente_id),
         cliente_label: etiquetaCliente[String(v.cliente_id)] ?? "Cliente sin nombre",
         monto_financiado: Number(v.monto_financiado ?? 0),
+        precio_contado: Number(v.precio_contado ?? 0),
+        entrega_inicial: Number(v.entrega_inicial ?? 0),
         cantidad_cuotas: Number(v.cantidad_cuotas ?? 0),
         moneda: String(v.moneda ?? "GS"),
         estado: v.estado as EstadoVenta,
+        modalidad: v.modalidad === "contado" ? "contado" : "financiada",
+        vendedor_id: v.vendedor_id ? String(v.vendedor_id) : null,
+        vendedor_label: v.vendedor_id ? (etiquetaVendedor[String(v.vendedor_id)] ?? null) : null,
         cuotas_pagadas: cuotas.filter((c) => c.estado === "pagada").length,
         cuotas_vencidas: vencidas,
         saldo: pendientes.reduce((a, c) => a + Number(c.saldo ?? 0), 0),
