@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import Select from "@/components/ui/Select";
+import { FancySelect } from "@/components/ui/FancySelect";
 import Link from "next/link";
 import { ArrowLeft, RefreshCw, Users } from "lucide-react";
 import { fetchWithSupabaseSession } from "@/lib/api/fetch-with-supabase-session";
@@ -146,14 +146,14 @@ export default function ComisionesClient() {
         </div>
         <div className="lg:col-span-2">
           <label className={labelClass}>Vendedor</label>
-          <Select value={vendedorId} onChange={(e) => setVendedorId(e.target.value)}>
-            <option value="">Todos los vendedores</option>
-            {vendedores.map((v) => (
-              <option key={v.id} value={v.id}>
-                {v.codigo} — {v.nombre}
-              </option>
-            ))}
-          </Select>
+          <FancySelect
+            value={vendedorId}
+            onChange={setVendedorId}
+            options={[
+              { value: "", label: "Todos los vendedores" },
+              ...vendedores.map((v) => ({ value: v.id, label: `${v.codigo} — ${v.nombre}` })),
+            ]}
+          />
         </div>
       </div>
 

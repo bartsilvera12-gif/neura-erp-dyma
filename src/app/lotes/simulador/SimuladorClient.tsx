@@ -6,7 +6,7 @@ import { ArrowLeft, Check, RefreshCw, Save, Trash2, Undo2 } from "lucide-react";
 import { fetchWithSupabaseSession } from "@/lib/api/fetch-with-supabase-session";
 import { getClientes } from "@/lib/clientes/storage";
 import SmartSearchSelect, { type SmartOption } from "@/components/ui/SmartSearchSelect";
-import Select from "@/components/ui/Select";
+import { FancySelect } from "@/components/ui/FancySelect";
 import MontoInput from "@/components/ui/MontoInput";
 import { FechaSelect } from "@/components/ui/FechaSelect";
 import ModalVenderLote, { type CondicionesIniciales } from "../ModalVenderLote";
@@ -279,16 +279,16 @@ export default function SimuladorClient() {
               <label className={labelClass}>
                 Lote <span className="font-normal text-slate-400">(necesario para generar contrato)</span>
               </label>
-              <Select value={loteId} onChange={(e) => setLoteId(e.target.value)}>
-                <option value="">Sin lote</option>
-                {lotes
-                  .filter((l) => l.estado === "disponible" || l.estado === "reservado" || l.id === loteId)
-                  .map((l) => (
-                    <option key={l.id} value={l.id}>
-                      Lote {l.numero} — {l.estado}
-                    </option>
-                  ))}
-              </Select>
+              <FancySelect
+                value={loteId}
+                onChange={setLoteId}
+                options={[
+                  { value: "", label: "Sin lote" },
+                  ...lotes
+                    .filter((l) => l.estado === "disponible" || l.estado === "reservado" || l.id === loteId)
+                    .map((l) => ({ value: l.id, label: `Lote ${l.numero}`, description: l.estado })),
+                ]}
+              />
             </div>
 
             <div>
@@ -389,16 +389,11 @@ export default function SimuladorClient() {
             </div>
             <div>
               <label className={labelClass}>Frecuencia</label>
-              <Select
+              <FancySelect
                 value={frecuencia}
-                onChange={(e) => setFrecuencia(e.target.value as Frecuencia)}
-              >
-                {Object.entries(FRECUENCIAS).map(([k, f]) => (
-                  <option key={k} value={k}>
-                    {f.label}
-                  </option>
-                ))}
-              </Select>
+                onChange={(v) => setFrecuencia(v as Frecuencia)}
+                options={Object.entries(FRECUENCIAS).map(([k, f]) => ({ value: k, label: f.label }))}
+              />
             </div>
             <div>
               <label className={labelClass}>Recargo (%)</label>

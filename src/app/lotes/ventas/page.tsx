@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import Select from "@/components/ui/Select";
+import { FancySelect } from "@/components/ui/FancySelect";
 import Link from "next/link";
 import { ArrowLeft, RefreshCw } from "lucide-react";
 import { fetchWithSupabaseSession } from "@/lib/api/fetch-with-supabase-session";
@@ -79,12 +79,16 @@ export default function VentasPage() {
 
       <div className="rounded-2xl border border-slate-200 bg-white p-4 sm:max-w-xs">
         <label className="mb-1 block text-xs font-medium text-slate-500">Estado</label>
-        <Select value={estado} onChange={(e) => setEstado(e.target.value)}>
-          <option value="vigente">Vigentes</option>
-          <option value="cancelada">Canceladas</option>
-          <option value="anulada">Anuladas</option>
-          <option value="">Todos</option>
-        </Select>
+        <FancySelect
+          value={estado}
+          onChange={setEstado}
+          options={[
+            { value: "vigente", label: "Vigentes" },
+            { value: "cancelada", label: "Canceladas" },
+            { value: "anulada", label: "Anuladas" },
+            { value: "", label: "Todos" },
+          ]}
+        />
       </div>
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">

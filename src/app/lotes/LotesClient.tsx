@@ -6,7 +6,7 @@ import { FileText, Plus, RefreshCw, Settings2, Trash2, X } from "lucide-react";
 import { fetchWithSupabaseSession } from "@/lib/api/fetch-with-supabase-session";
 import { getClientes } from "@/lib/clientes/storage";
 import SmartSearchSelect, { type SmartOption } from "@/components/ui/SmartSearchSelect";
-import Select from "@/components/ui/Select";
+import { FancySelect } from "@/components/ui/FancySelect";
 import MontoInput from "@/components/ui/MontoInput";
 import ModalVenderLote from "./ModalVenderLote";
 import ModalVenderContado from "./ModalVenderContado";
@@ -224,41 +224,39 @@ export default function LotesClient() {
           <div className="grid gap-3 rounded-2xl border border-slate-200 bg-white p-4 sm:grid-cols-2 lg:grid-cols-3">
             <div>
               <label className={labelClass}>Loteamiento</label>
-              <Select
+              <FancySelect
                 value={loteamientoId}
-                onChange={(e) => {
-                  setLoteamientoId(e.target.value);
+                onChange={(v) => {
+                  setLoteamientoId(v);
                   setManzanaId("");
                 }}
-              >
-                {(estructura?.loteamientos ?? []).map((l) => (
-                  <option key={l.id} value={l.id}>
-                    {l.codigo} — {l.nombre}
-                  </option>
-                ))}
-              </Select>
+                options={(estructura?.loteamientos ?? []).map((l) => ({
+                  value: l.id,
+                  label: `${l.codigo} — ${l.nombre}`,
+                }))}
+              />
             </div>
             <div>
               <label className={labelClass}>Manzana</label>
-              <Select value={manzanaId} onChange={(e) => setManzanaId(e.target.value)}>
-                <option value="">Todas las manzanas</option>
-                {manzanasDelLoteamiento.map((m) => (
-                  <option key={m.id} value={m.id}>
-                    {m.etiqueta}
-                  </option>
-                ))}
-              </Select>
+              <FancySelect
+                value={manzanaId}
+                onChange={setManzanaId}
+                options={[
+                  { value: "", label: "Todas las manzanas" },
+                  ...manzanasDelLoteamiento.map((m) => ({ value: m.id, label: m.etiqueta })),
+                ]}
+              />
             </div>
             <div>
               <label className={labelClass}>Estado</label>
-              <Select value={filtroEstado} onChange={(e) => setFiltroEstado(e.target.value)}>
-                <option value="">Todos los estados</option>
-                {ESTADOS_LOTE.map((e) => (
-                  <option key={e} value={e}>
-                    {ESTADO_LOTE_UI[e].label}
-                  </option>
-                ))}
-              </Select>
+              <FancySelect
+                value={filtroEstado}
+                onChange={setFiltroEstado}
+                options={[
+                  { value: "", label: "Todos los estados" },
+                  ...ESTADOS_LOTE.map((e) => ({ value: e, label: ESTADO_LOTE_UI[e].label })),
+                ]}
+              />
             </div>
           </div>
 
@@ -538,16 +536,11 @@ function PanelLote({
             <div className="grid gap-3">
               <div>
                 <label className={labelClass}>Estado</label>
-                <Select
+                <FancySelect
                   value={estado}
-                  onChange={(e) => setEstado(e.target.value as EstadoLote)}
-                >
-                  {ESTADOS_LOTE.map((e) => (
-                    <option key={e} value={e}>
-                      {ESTADO_LOTE_UI[e].label}
-                    </option>
-                  ))}
-                </Select>
+                  onChange={(v) => setEstado(v as EstadoLote)}
+                  options={ESTADOS_LOTE.map((e) => ({ value: e, label: ESTADO_LOTE_UI[e].label }))}
+                />
               </div>
               {exigeTitular ? (
                 <div>
@@ -651,13 +644,14 @@ function PanelLote({
               </div>
               <div>
                 <label className={labelClass}>Moneda</label>
-                <Select
+                <FancySelect
                   value={form.moneda}
-                  onChange={(e) => set("moneda", e.target.value)}
-                >
-                  <option value="GS">Gs.</option>
-                  <option value="USD">USD</option>
-                </Select>
+                  onChange={(v) => set("moneda", v)}
+                  options={[
+                    { value: "GS", label: "Gs." },
+                    { value: "USD", label: "USD" },
+                  ]}
+                />
               </div>
             </div>
             <p className="mt-2 text-[11px] text-slate-400">
@@ -782,13 +776,11 @@ function ModalNuevoLote({
         <div className="mt-4 grid gap-3">
           <div>
             <label className={labelClass}>Manzana</label>
-            <Select value={manzana} onChange={(e) => setManzana(e.target.value)}>
-              {manzanas.map((m) => (
-                <option key={m.id} value={m.id}>
-                  {m.etiqueta}
-                </option>
-              ))}
-            </Select>
+            <FancySelect
+              value={manzana}
+              onChange={setManzana}
+              options={manzanas.map((m) => ({ value: m.id, label: m.etiqueta }))}
+            />
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
@@ -832,13 +824,14 @@ function ModalNuevoLote({
             </div>
             <div>
               <label className={labelClass}>Moneda</label>
-              <Select
+              <FancySelect
                 value={moneda}
-                onChange={(e) => setMoneda(e.target.value as MonedaLote)}
-              >
-                <option value="GS">Gs.</option>
-                <option value="USD">USD</option>
-              </Select>
+                onChange={(v) => setMoneda(v as MonedaLote)}
+                options={[
+                  { value: "GS", label: "Gs." },
+                  { value: "USD", label: "USD" },
+                ]}
+              />
             </div>
           </div>
         </div>

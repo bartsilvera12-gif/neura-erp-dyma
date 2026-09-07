@@ -6,7 +6,7 @@ import { Pencil, Plus, RefreshCw, Trash2, X } from "lucide-react";
 import { fetchWithSupabaseSession } from "@/lib/api/fetch-with-supabase-session";
 import { getClientes } from "@/lib/clientes/storage";
 import SmartSearchSelect, { type SmartOption } from "@/components/ui/SmartSearchSelect";
-import Select from "@/components/ui/Select";
+import { FancySelect } from "@/components/ui/FancySelect";
 import { FechaSelect } from "@/components/ui/FechaSelect";
 import type { Cliente } from "@/lib/clientes/types";
 import type {
@@ -512,26 +512,28 @@ function ModalServicio({
             </div>
             <div>
               <label className={labelClass}>Moneda</label>
-              <Select
+              <FancySelect
                 value={moneda}
-                onChange={(e) => setMoneda(e.target.value as MonedaLimpieza)}
+                onChange={(v) => setMoneda(v as MonedaLimpieza)}
                 disabled={congelado}
-              >
-                <option value="GS">Gs.</option>
-                <option value="USD">USD</option>
-              </Select>
+                options={[
+                  { value: "GS", label: "Gs." },
+                  { value: "USD", label: "USD" },
+                ]}
+              />
             </div>
           </div>
           <div>
             <label className={labelClass}>Condición de la factura</label>
-            <Select
+            <FancySelect
               value={tipoFactura}
-              onChange={(e) => setTipoFactura(e.target.value as TipoFacturaLimpieza)}
+              onChange={(v) => setTipoFactura(v as TipoFacturaLimpieza)}
               disabled={congelado}
-            >
-              <option value="contado">Contado — vence el mismo día</option>
-              <option value="credito">Crédito — vence según el plazo de la instancia</option>
-            </Select>
+              options={[
+                { value: "contado", label: "Contado", description: "Vence el mismo día" },
+                { value: "credito", label: "Crédito", description: "Vence según el plazo de la instancia" },
+              ]}
+            />
           </div>
           <div>
             <label className={labelClass}>

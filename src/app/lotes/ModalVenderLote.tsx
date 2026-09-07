@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { X } from "lucide-react";
 import { fetchWithSupabaseSession } from "@/lib/api/fetch-with-supabase-session";
 import SmartSearchSelect, { type SmartOption } from "@/components/ui/SmartSearchSelect";
-import Select from "@/components/ui/Select";
+import { FancySelect } from "@/components/ui/FancySelect";
 import MontoInput from "@/components/ui/MontoInput";
 import { FechaSelect } from "@/components/ui/FechaSelect";
 import {
@@ -255,14 +255,12 @@ export default function ModalVenderLote({
         <div className="mt-4 grid gap-3 sm:grid-cols-2">
           <div className="sm:col-span-2">
             <label className={labelClass}>Tipo de contrato</label>
-            <Select value={tipoId} onChange={(e) => elegirTipo(e.target.value)}>
-              {tipos.length === 0 ? <option value="">Sin tipos configurados</option> : null}
-              {tipos.map((t) => (
-                <option key={t.id} value={t.id}>
-                  {t.nombre}
-                </option>
-              ))}
-            </Select>
+            <FancySelect
+              value={tipoId}
+              onChange={elegirTipo}
+              placeholder={tipos.length === 0 ? "Sin tipos configurados" : "Elegí el tipo"}
+              options={tipos.map((t) => ({ value: t.id, label: t.nombre, description: t.descripcion ?? undefined }))}
+            />
             {tipoElegido?.descripcion ? (
               <p className="mt-1 text-[10px] text-slate-400">{tipoElegido.descripcion}</p>
             ) : null}
@@ -314,14 +312,14 @@ export default function ModalVenderLote({
             <label className={labelClass}>
               Vendedor <span className="font-normal text-slate-400">(opcional)</span>
             </label>
-            <Select value={vendedorId} onChange={(e) => elegirVendedor(e.target.value)}>
-              <option value="">Sin vendedor</option>
-              {vendedores.map((v) => (
-                <option key={v.id} value={v.id}>
-                  {v.codigo} — {v.nombre}
-                </option>
-              ))}
-            </Select>
+            <FancySelect
+              value={vendedorId}
+              onChange={elegirVendedor}
+              options={[
+                { value: "", label: "Sin vendedor" },
+                ...vendedores.map((v) => ({ value: v.id, label: `${v.codigo} — ${v.nombre}` })),
+              ]}
+            />
           </div>
           <div>
             <label className={labelClass}>Comisión del vendedor (%)</label>
@@ -372,16 +370,11 @@ export default function ModalVenderLote({
           </div>
           <div>
             <label className={labelClass}>Frecuencia de pago</label>
-            <Select
+            <FancySelect
               value={frecuencia}
-              onChange={(e) => setFrecuencia(e.target.value as Frecuencia)}
-            >
-              {Object.entries(FRECUENCIAS).map(([k, f]) => (
-                <option key={k} value={k}>
-                  {f.label}
-                </option>
-              ))}
-            </Select>
+              onChange={(v) => setFrecuencia(v as Frecuencia)}
+              options={Object.entries(FRECUENCIAS).map(([k, f]) => ({ value: k, label: f.label }))}
+            />
           </div>
           <div>
             <label className={labelClass}>Cantidad de cuotas</label>

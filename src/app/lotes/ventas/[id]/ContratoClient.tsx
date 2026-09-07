@@ -5,7 +5,7 @@ import Link from "next/link";
 import { ArrowLeft, Printer, RefreshCw, X } from "lucide-react";
 import { fetchWithSupabaseSession } from "@/lib/api/fetch-with-supabase-session";
 import MontoInput from "@/components/ui/MontoInput";
-import Select from "@/components/ui/Select";
+import { FancySelect } from "@/components/ui/FancySelect";
 import { FechaSelect } from "@/components/ui/FechaSelect";
 import { ESTADO_CUOTA_UI, ESTADO_VENTA_UI, type CuotaVenta, type VentaLote } from "@/lib/financiacion/types";
 
@@ -451,13 +451,17 @@ function ModalCobrar({
           </div>
           <div>
             <label className={labelClass}>Método</label>
-            <Select value={metodo} onChange={(e) => setMetodo(e.target.value)}>
-              <option value="efectivo">Efectivo</option>
-              <option value="transferencia">Transferencia</option>
-              <option value="cheque">Cheque</option>
-              <option value="tarjeta">Tarjeta</option>
-              <option value="otro">Otro</option>
-            </Select>
+            <FancySelect
+              value={metodo}
+              onChange={setMetodo}
+              options={[
+                { value: "efectivo", label: "Efectivo" },
+                { value: "transferencia", label: "Transferencia" },
+                { value: "cheque", label: "Cheque" },
+                { value: "tarjeta", label: "Tarjeta" },
+                { value: "otro", label: "Otro" },
+              ]}
+            />
           </div>
           <div>
             <label className={labelClass}>

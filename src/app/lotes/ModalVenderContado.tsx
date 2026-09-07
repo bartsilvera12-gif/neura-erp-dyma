@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { X } from "lucide-react";
 import { fetchWithSupabaseSession } from "@/lib/api/fetch-with-supabase-session";
 import SmartSearchSelect, { type SmartOption } from "@/components/ui/SmartSearchSelect";
-import Select from "@/components/ui/Select";
+import { FancySelect } from "@/components/ui/FancySelect";
 import MontoInput from "@/components/ui/MontoInput";
 import { FechaSelect } from "@/components/ui/FechaSelect";
 import { FormParte } from "./ModalVenderLote";
@@ -211,14 +211,12 @@ export default function ModalVenderContado({
         <div className="mt-4 grid gap-3 sm:grid-cols-2">
           <div className="sm:col-span-2">
             <label className={labelClass}>Tipo de contrato</label>
-            <Select value={tipoId} onChange={(e) => elegirTipo(e.target.value)}>
-              {tipos.length === 0 ? <option value="">Sin tipos configurados</option> : null}
-              {tipos.map((t) => (
-                <option key={t.id} value={t.id}>
-                  {t.nombre}
-                </option>
-              ))}
-            </Select>
+            <FancySelect
+              value={tipoId}
+              onChange={elegirTipo}
+              placeholder={tipos.length === 0 ? "Sin tipos configurados" : "Elegí el tipo"}
+              options={tipos.map((t) => ({ value: t.id, label: t.nombre, description: t.descripcion ?? undefined }))}
+            />
           </div>
 
           <div className="sm:col-span-2">
@@ -288,13 +286,11 @@ export default function ModalVenderContado({
           </div>
           <div>
             <label className={labelClass}>Método de pago</label>
-            <Select value={metodo} onChange={(e) => setMetodo(e.target.value)}>
-              {METODOS.map((m) => (
-                <option key={m.id} value={m.id}>
-                  {m.label}
-                </option>
-              ))}
-            </Select>
+            <FancySelect
+              value={metodo}
+              onChange={setMetodo}
+              options={METODOS.map((m) => ({ value: m.id, label: m.label }))}
+            />
           </div>
           <div>
             <label className={labelClass}>
