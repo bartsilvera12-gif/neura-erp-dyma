@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { motion } from "framer-motion";
 import { getConfig } from "@/lib/config/storage";
@@ -33,6 +33,7 @@ import {
   toCalendarDateStr,
 } from "@/lib/fechas/calendario";
 import { fetchWithSupabaseSession } from "@/lib/api/fetch-with-supabase-session";
+import type { PanelLotes } from "@/lib/lotes/panel-types";
 import { etiquetaVisibleTipoServicio } from "@/lib/clientes/tipo-servicio-catalogo";
 import { useMapNombreTipoServicioCatalogo } from "@/lib/clientes/use-map-nombre-tipo-servicio";
 import { getEtapas, getEtapaClasses, normalizeEtapaCodigo, type EtapaCrm } from "@/lib/crm/etapas";
@@ -1611,6 +1612,151 @@ function DashFinanciero({
   );
 }
 
+// ── Dashboard Lotes ───────────────────────────────────────────────────────────
+
+/**
+ * Panel del negocio de loteamiento.
+ *
+ * Trae sus propios datos de /api/lotes/panel en vez de colgarse de los estados
+ * del dashboard general: esos cargan productos, compras y ventas de inventario,
+ * que en esta instancia no existen. La mora se calcula en el servidor al vuelo.
+ */
+function DashLotes() {
+  const [data, setData] = useState<PanelLotes | null>(null);
+  const [cargando, setCargando] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const cargar = useCallback(async () => {
+    setCargando(true);
+    setError(null);
+    try {
+      const res = await fetchWithSupabaseSession("/api/lotes/panel", { cache: "no-store" });
+      const json = (await res.json()) as { success?: boolean; error?: string; data?: PanelLotes };
+      if (!res.ok || json.success !== true || !json.data) throw new Error(json.error ?? `Error ${res.status}`);
+      setData(json.data);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "No se pudo cargar el panel de lotes");
+      setData(null);
+    } finally {
+      setCargando(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void cargar();
+  }, [cargar]);
+
+  if (cargando) {
+    return (
+      <div className="rounded-xl border border-slate-200 bg-white px-6 py-16 text-center text-sm text-slate-400">
+        Cargando panel de lotes…
+      </div>
+    );
+  }
+  if (error || !data) {
+    return (
+      <div className="rounded-xl border border-rose-200 bg-rose-50 px-6 py-4 text-sm text-rose-700">
+        {error ?? "Sin datos"}
+      </div>
+    );
+  }
+
+  const { lotes, contratos, cartera } = data;
+  const vendidosPct = lotes.total > 0 ? Math.round((lotes.vendido / lotes.total) * 100) : 0;
+
+  return (
+    <div className="space-y-5">
+      {/* KPIs del stock de lotes */}
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <KpiCard icon="🗺️" label="Lotes totales" value={String(lotes.total)}
+          sub={lotes.superficie_total > 0 ? `${formatGs(lotes.superficie_total)} m² en total` : undefined}
+          color="text-[#0EA5E9]" />
+        <KpiCard icon="🟢" label="Disponibles" value={String(lotes.disponible)}
+          sub={lotes.reservado > 0 ? `${lotes.reservado} reservado(s)` : "sin reservas"}
+          color="text-emerald-600" />
+        <KpiCard icon="🏠" label="Vendidos" value={String(lotes.vendido)}
+          sub={`${vendidosPct}% del loteamiento`} color="text-[#0EA5E9]" />
+        <KpiCard icon="💎" label="Por vender (precio de lista)"
+          value={`Gs. ${formatGsFull(lotes.valor_disponible)}`} color="text-[#0EA5E9]" />
+      </div>
+
+      {/* KPIs de la cobranza */}
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <KpiCard icon="📄" label="Contratos vigentes" value={String(contratos.vigentes)}
+          sub={contratos.cancelados > 0 ? `${contratos.cancelados} cancelado(s)` : undefined}
+          color="text-[#0EA5E9]" />
+        <KpiCard icon="🏦" label="Saldo por cobrar"
+          value={`Gs. ${formatGsFull(cartera.saldo_por_cobrar)}`}
+          sub={`${cartera.cuotas_pendientes} cuota(s) pendiente(s)`} color="text-[#0EA5E9]" />
+        <KpiCard icon="⚠️" label="Mora acumulada"
+          value={`Gs. ${formatGsFull(cartera.mora_acumulada)}`}
+          sub={cartera.cuotas_vencidas > 0 ? `${cartera.cuotas_vencidas} cuota(s) vencida(s)` : "todo al día"}
+          color={cartera.mora_acumulada > 0 ? "text-red-600" : "text-emerald-600"} />
+        <KpiCard icon="💰" label="Cobrado este mes"
+          value={`Gs. ${formatGsFull(cartera.cobrado_mes)}`}
+          sub={`${cartera.cobros_mes} cobro(s)`} color="text-emerald-600" />
+      </div>
+
+      {/* Estado de los lotes + qué mirar ahora */}
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+        <motion.div whileHover={{ y: -2 }} className="bg-white border border-slate-200 rounded-xl shadow-sm hover:shadow-md transition-all duration-200 p-6">
+          <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-4">Estado de los lotes</h3>
+          <DonutChart segments={[
+            { label: "Disponibles", value: lotes.disponible, color: "#22c55e" },
+            { label: "Reservados",  value: lotes.reservado,  color: "#f59e0b" },
+            { label: "Vendidos",    value: lotes.vendido,    color: "#0EA5E9" },
+            { label: "Bloqueados",  value: lotes.bloqueado,  color: "#94a3b8" },
+          ]} centerLabel="lotes" />
+        </motion.div>
+
+        <motion.div whileHover={{ y: -2 }} className="lg:col-span-2 bg-white border border-slate-200 rounded-xl shadow-sm hover:shadow-md transition-all duration-200 p-6">
+          <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-4">La cobranza de un vistazo</h3>
+
+          {lotes.total === 0 ? (
+            <div className="rounded-lg bg-slate-50 px-4 py-3 text-sm text-slate-500">
+              Todavía no hay lotes cargados. Empezá por <Link href="/lotes/estructura" className="font-semibold text-[#0EA5E9] hover:underline">Estructura</Link> para crear el loteamiento.
+            </div>
+          ) : contratos.vigentes === 0 ? (
+            <div className="rounded-lg bg-slate-50 px-4 py-3 text-sm text-slate-500">
+              Hay lotes cargados pero ningún contrato vigente. Vendé uno desde <Link href="/lotes" className="font-semibold text-[#0EA5E9] hover:underline">Lotes</Link>.
+            </div>
+          ) : (
+            <div className="space-y-2.5">
+              <FilaPanel etiqueta="Total financiado en contratos"
+                valor={`Gs. ${formatGsFull(contratos.financiado_total)}`} />
+              <FilaPanel etiqueta="Ya cobrado"
+                valor={`Gs. ${formatGsFull(Math.max(0, contratos.financiado_total - cartera.saldo_por_cobrar))}`} />
+              <FilaPanel etiqueta="Vence en los próximos 30 días"
+                valor={`Gs. ${formatGsFull(cartera.vence_en_30_dias)}`} />
+              <FilaPanel etiqueta="Cuotas vencidas" valor={String(cartera.cuotas_vencidas)}
+                alerta={cartera.cuotas_vencidas > 0} />
+              <FilaPanel etiqueta="Mora acumulada al día de hoy"
+                valor={`Gs. ${formatGsFull(cartera.mora_acumulada)}`}
+                alerta={cartera.mora_acumulada > 0} />
+            </div>
+          )}
+
+          <div className="mt-5 flex flex-wrap gap-2 border-t border-slate-100 pt-4">
+            <Link href="/lotes" className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50">Mapa de lotes</Link>
+            <Link href="/lotes/simulador" className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50">Simulador</Link>
+            <Link href="/lotes/ventas" className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50">Contratos</Link>
+            <Link href="/lotes/comisiones" className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50">Comisiones</Link>
+          </div>
+        </motion.div>
+      </div>
+    </div>
+  );
+}
+
+function FilaPanel({ etiqueta, valor, alerta }: { etiqueta: string; valor: string; alerta?: boolean }) {
+  return (
+    <div className="flex items-baseline justify-between gap-3 border-b border-slate-100 pb-2 last:border-0">
+      <span className="text-sm text-slate-500">{etiqueta}</span>
+      <span className={`text-sm font-bold tabular-nums ${alerta ? "text-red-600" : "text-slate-900"}`}>{valor}</span>
+    </div>
+  );
+}
+
 // ── Dashboard Inventario ─────────────────────────────────────────────────────
 
 function DashInventario({
@@ -2177,8 +2323,9 @@ export default function DashboardPage() {
   const mapNombreTipoServicio = useMapNombreTipoServicioCatalogo(clientes);
   const nivel = usuarioActivo?.nivel ?? "administrador";
 
-  // Instancia DYMA: solo Ventas / Inventario / Financiero (sin Comercial/CRM/Pipeline).
-  const MARI_ALLOWED_TABS: TabDash[] = ["ventas", "inventario", "financiero"];
+  // Instancia DYMA: el negocio es loteamiento, no depósito. Inventario queda
+  // fuera de la vista (el código sigue, por si otra instancia lo usa).
+  const MARI_ALLOWED_TABS: TabDash[] = ["lotes", "financiero", "ventas"];
   const rawTabs: TabDash[] = dashScope.kind === "scoped" ? dashScope.tabs : TAB_VALID;
   const effectiveTabs: TabDash[] = rawTabs.filter((t) => MARI_ALLOWED_TABS.includes(t));
   const showTabNav = effectiveTabs.length > 1;
@@ -2197,6 +2344,7 @@ export default function DashboardPage() {
     comercial: { label: "Comercial", icon: "📊" },
     financiero: { label: "Financiero", icon: "💰" },
     inventario: { label: "Inventario", icon: "📦" },
+    lotes: { label: "Lotes", icon: "🗺️" },
     ventas: { label: "Ventas", icon: "🛒" },
   };
 
@@ -2392,6 +2540,8 @@ export default function DashboardPage() {
           mapNombreTipoServicio={mapNombreTipoServicio}
         />
       )}
+
+      {tab === "lotes" && <DashLotes />}
 
       {tab === "inventario" && (
         <DashInventario
