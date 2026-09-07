@@ -260,15 +260,23 @@ export default function LotesClient() {
             </div>
           </div>
 
-          {/* Contadores por estado */}
+          {/* Contadores por estado, que además filtran */}
           <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-6">
-            <Tarjeta titulo="Total" valor={String(resumen?.total ?? 0)} />
+            <Tarjeta
+              titulo="Total"
+              valor={String(resumen?.total ?? 0)}
+              activo={filtroEstado === ""}
+              onClick={() => setFiltroEstado("")}
+            />
             {ESTADOS_LOTE.map((e) => (
               <Tarjeta
                 key={e}
                 titulo={ESTADO_LOTE_UI[e].label}
                 valor={String(resumen?.[e] ?? 0)}
                 punto={ESTADO_LOTE_UI[e].punto}
+                activo={filtroEstado === e}
+                // Volver a tocar la tarjeta activa quita el filtro.
+                onClick={() => setFiltroEstado((prev) => (prev === e ? "" : e))}
               />
             ))}
             <Tarjeta titulo="Superficie" valor={fmtM2(resumen?.superficie_total ?? 0)} />
@@ -393,17 +401,50 @@ export default function LotesClient() {
   );
 }
 
-function Tarjeta({ titulo, valor, punto }: { titulo: string; valor: string; punto?: string }) {
+function Tarjeta({
+  titulo,
+  valor,
+  punto,
+  activo,
+  onClick,
+}: {
+  titulo: string;
+  valor: string;
+  punto?: string;
+  activo?: boolean;
+  onClick?: () => void;
+}) {
   // Barra de color del estado arriba: la grilla de abajo usa el mismo código.
-  return (
-    <div className="group relative overflow-hidden rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition-shadow hover:shadow-md">
+  const contenido = (
+    <>
       <span className={`absolute inset-x-0 top-0 h-1 ${punto ?? "bg-slate-200"}`} />
       <p className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-slate-500">
         {punto ? <span className={`h-2 w-2 rounded-full ${punto}`} /> : null}
         {titulo}
       </p>
       <p className="mt-1.5 text-2xl font-bold tabular-nums tracking-tight text-slate-900">{valor}</p>
-    </div>
+    </>
+  );
+
+  const base =
+    "group relative w-full overflow-hidden rounded-2xl border bg-white p-5 text-left shadow-sm transition-all";
+
+  if (!onClick) {
+    return <div className={`${base} border-slate-200`}>{contenido}</div>;
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={activo === true}
+      title={activo ? "Quitar el filtro" : `Ver solo ${titulo.toLowerCase()}`}
+      className={`${base} hover:-translate-y-0.5 hover:shadow-md ${
+        activo ? "border-[#0EA5E9] ring-2 ring-[#0EA5E9]/25" : "border-slate-200"
+      }`}
+    >
+      {contenido}
+    </button>
   );
 }
 

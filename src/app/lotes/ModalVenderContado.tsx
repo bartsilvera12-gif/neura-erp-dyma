@@ -10,6 +10,7 @@ import { FechaSelect } from "@/components/ui/FechaSelect";
 import { FormParte } from "./ModalVenderLote";
 import type { Lote } from "@/lib/lotes/types";
 import type { ContratoTipo, ParteContrato, RolParte } from "@/lib/contratos/types";
+import type { Vendedor } from "@/lib/vendedores/types";
 
 const inputClass =
   "w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm text-slate-800 shadow-sm outline-none transition-colors placeholder:text-slate-400 hover:border-slate-300 focus:border-[#0EA5E9] focus:ring-2 focus:ring-[#0EA5E9]/25 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400";
@@ -84,6 +85,10 @@ export default function ModalVenderContado({
   const [observacion, setObservacion] = useState("");
   const [tipos, setTipos] = useState<ContratoTipo[]>([]);
   const [tipoId, setTipoId] = useState("");
+  const [vendedores, setVendedores] = useState<Vendedor[]>([]);
+  const [vendedorId, setVendedorId] = useState("");
+  /** En porcentaje, como lo piensa el negocio; la API lo pasa a fracción. */
+  const [comision, setComision] = useState("0");
   const [conyuge, setConyuge] = useState<ParteContrato>(() => parteVacia("conyuge"));
   const [codeudores, setCodeudores] = useState<ParteContrato[]>([]);
   const [guardando, setGuardando] = useState(false);
@@ -98,7 +103,21 @@ export default function ModalVenderContado({
         if (lista.length > 0) setTipoId((prev) => prev || lista[0]!.id);
       })
       .catch(() => setTipos([]));
+
+    fetchWithSupabaseSession("/api/lotes/vendedores", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((j: { success?: boolean; data?: { vendedores: Vendedor[] } }) => {
+        setVendedores(j.success === true && j.data ? j.data.vendedores : []);
+      })
+      .catch(() => setVendedores([]));
   }, []);
+
+  /** Al elegir vendedor se propone SU comisión; queda editable para esta venta. */
+  function elegirVendedor(id: string) {
+    setVendedorId(id);
+    const v = vendedores.find((x) => x.id === id);
+    setComision(v ? String(Math.round(v.comision_pct * 1e6) / 1e4) : "0");
+  }
 
   const tipoElegido = tipos.find((t) => t.id === tipoId) ?? null;
 
@@ -132,6 +151,8 @@ export default function ModalVenderContado({
           primer_vencimiento: fecha,
           precio_contado: monto,
           tipo_contrato_id: tipoId || null,
+          vendedor_id: vendedorId || null,
+          comision_pct: vendedorId ? comision : 0,
           partes: [
             ...(tipoElegido?.requiere_conyuge ? [conyuge] : []),
             ...(tipoElegido?.requiere_codeudor ? codeudores : []),
@@ -283,6 +304,36 @@ export default function ModalVenderContado({
                 Este lote no tiene precio de lista cargado.
               </p>
             )}
+          </div>
+          <div>
+            <label className={labelClass}>
+              Vendedor <span className="font-normal text-slate-400">(opcional)</span>
+            </label>
+            <FancySelect
+              value={vendedorId}
+              onChange={elegirVendedor}
+              options={[
+                { value: "", label: "Sin vendedor" },
+                ...vendedores.map((v) => ({ value: v.id, label: `${v.codigo} — ${v.nombre}` })),
+              ]}
+            />
+          </div>
+          <div>
+            <label className={labelClass}>Comisión del vendedor (%)</label>
+            <input
+              type="number"
+              min={0}
+              max={100}
+              step="0.01"
+              value={comision}
+              onChange={(e) => setComision(e.target.value)}
+              onFocus={(e) => e.currentTarget.select()}
+              disabled={!vendedorId}
+              className={inputClass}
+            />
+            <p className="mt-1 text-[10px] text-slate-400">
+              Se liquida sobre el cobro, que en esta venta ocurre hoy mismo.
+            </p>
           </div>
           <div>
             <label className={labelClass}>Método de pago</label>
