@@ -311,7 +311,10 @@ export function plantillaFactura(datos: DatosFactura, opciones?: { autoImprimir?
   .detalle th{text-align:center;font-weight:700;font-size:7pt;background:#fff}
   .detalle .ventas{letter-spacing:.28em;font-weight:800}
   .detalle td.c{text-align:center} .detalle td.n{text-align:right}
-  .detalle tr.vacia td{height:.27in}
+  /* Todos los renglones miden lo mismo. Si la altura se pone solo en los
+     vacíos, el sobrante de la grilla se lo lleva entero la fila con texto y
+     queda un primer renglón enorme sobre cinco chiquitos. */
+  .detalle tbody td{height:.27in}
   /* Dos líneas como máximo: una descripción larguísima no puede empujar el
      renglón siguiente fuera de la media hoja. */
   /* El recorte va en el span y no en la celda: un td no puede ser -webkit-box
