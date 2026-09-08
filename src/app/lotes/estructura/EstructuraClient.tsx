@@ -78,17 +78,27 @@ export default function EstructuraClient() {
     [load, showToast]
   );
 
+  /**
+   * El árbol, con la fracción escondida cuando hay una sola.
+   *
+   * El modelo sigue siendo loteamiento → fracción → manzana, pero un
+   * loteamiento sin fraccionar no tiene por qué mostrar un nivel intermedio
+   * vacío de sentido: se listan sus manzanas directo. El nivel reaparece solo
+   * cuando de verdad hay más de una fracción.
+   */
   const arbol = useMemo(() => {
     if (!data) return [];
-    return data.loteamientos.map((lo) => ({
-      ...lo,
-      fracciones: data.fracciones
+    return data.loteamientos.map((lo) => {
+      const fracciones = data.fracciones
         .filter((f) => f.loteamiento_id === lo.id)
-        .map((f) => ({
-          ...f,
-          manzanas: data.manzanas.filter((m) => m.fraccion_id === f.id),
-        })),
-    }));
+        .map((f) => ({ ...f, manzanas: data.manzanas.filter((m) => m.fraccion_id === f.id) }));
+      return {
+        ...lo,
+        fracciones,
+        manzanas: fracciones.flatMap((f) => f.manzanas),
+        variasFracciones: fracciones.length > 1,
+      };
+    });
   }, [data]);
 
   return (
@@ -104,7 +114,7 @@ export default function EstructuraClient() {
           </Link>
           <h1 className="text-[26px] font-bold tracking-tight text-slate-900">Estructura del loteamiento</h1>
           <p className="mt-1 text-sm text-slate-500">
-            Jerarquía sobre la que cuelgan los lotes: loteamiento → fracción → manzana.
+            Loteamientos y sus manzanas. La fracción solo hace falta si el loteamiento viene dividido.
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -139,7 +149,7 @@ export default function EstructuraClient() {
       ) : arbol.length === 0 ? (
         <div className="rounded-2xl border border-slate-200 bg-white p-10 text-center">
           <p className="text-sm font-medium text-slate-700">Todavía no hay loteamientos.</p>
-          <p className="mt-1 text-xs text-slate-500">Creá el primero para empezar a cargar fracciones y manzanas.</p>
+          <p className="mt-1 text-xs text-slate-500">Creá el primero y después cargá sus manzanas.</p>
         </div>
       ) : (
         <div className="space-y-3">
@@ -164,13 +174,28 @@ export default function EstructuraClient() {
                   ) : null}
                 </button>
                 <div className="flex items-center gap-2">
-                  <span className="text-xs text-slate-500">{lo.fracciones.length} fracción(es)</span>
+                  <span className="text-xs text-slate-500">
+                    {lo.manzanas.length} manzana{lo.manzanas.length === 1 ? "" : "s"}
+                    {lo.variasFracciones ? ` · ${lo.fracciones.length} fracciones` : ""}
+                  </span>
+                  {/* La manzana cuelga directo del loteamiento: la fracción, si
+                      hace falta, la resuelve el servidor. */}
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setAlta({ nivel: "manzana", padreId: lo.id, padreLabel: `${lo.codigo} — ${lo.nombre}` })
+                    }
+                    className="rounded-lg bg-[#0EA5E9] px-2 py-1 text-[11px] font-semibold text-white hover:bg-[#0284C7]"
+                  >
+                    + Manzana
+                  </button>
                   <button
                     type="button"
                     onClick={() =>
                       setAlta({ nivel: "fraccion", padreId: lo.id, padreLabel: `${lo.codigo} — ${lo.nombre}` })
                     }
-                    className="rounded-lg border border-slate-200 px-2 py-1 text-[11px] font-semibold text-slate-600 hover:bg-slate-50"
+                    title="Solo si el loteamiento viene dividido en fracciones"
+                    className="rounded-lg border border-slate-200 px-2 py-1 text-[11px] font-semibold text-slate-500 hover:bg-slate-50"
                   >
                     + Fracción
                   </button>
@@ -186,8 +211,33 @@ export default function EstructuraClient() {
 
               {expandidos.has(lo.id) ? (
                 <div className="divide-y divide-slate-100">
-                  {lo.fracciones.length === 0 ? (
-                    <p className="px-4 py-4 text-xs text-slate-400">Sin fracciones todavía.</p>
+                  {!lo.variasFracciones ? (
+                    <div className="px-4 py-3">
+                      {lo.manzanas.length === 0 ? (
+                        <p className="text-xs text-slate-400">
+                          Sin manzanas todavía. Creá la primera con <strong>+ Manzana</strong> y después cargá
+                          sus lotes.
+                        </p>
+                      ) : (
+                        <div className="flex flex-wrap gap-2">
+                          {lo.manzanas.map((mz) => (
+                            <span
+                              key={mz.id}
+                              className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs text-slate-700"
+                            >
+                              Manzana {mz.codigo}
+                              <button
+                                type="button"
+                                onClick={() => void eliminar("manzana", mz.id, mz.codigo)}
+                                className="text-slate-400 hover:text-rose-600"
+                              >
+                                <X className="h-3 w-3" />
+                              </button>
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
                   ) : (
                     lo.fracciones.map((fr) => (
                       <div key={fr.id} className="px-4 py-3">

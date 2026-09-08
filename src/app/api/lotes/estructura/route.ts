@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireLotesModuleAccess } from "@/lib/lotes/lotes-auth";
 import { errorResponse, successResponse } from "@/lib/api/response";
+import { fraccionParaManzana } from "@/lib/lotes/estructura-implicita";
 import type { EstructuraPayload, NivelEstructura } from "@/lib/lotes/types";
 
 export const dynamic = "force-dynamic";
@@ -80,6 +81,42 @@ export async function POST(request: Request) {
   try {
     const { sb, empresaId } = auth;
     const fila: Record<string, unknown> = { empresa_id: empresaId, codigo };
+
+    // Una manzana puede colgar directo del loteamiento: si viene un loteamiento
+    // como padre, la fracción se resuelve sola. Nadie tiene que inventar una
+    // fracción para poder cargar la primera manzana.
+    if (nivel === "manzana") {
+      const { data: esLoteamiento } = await sb
+        .from("loteamientos")
+        .select("id")
+        .eq("id", padreId)
+        .eq("empresa_id", empresaId)
+        .maybeSingle();
+      if (esLoteamiento) {
+        const fraccionId = await fraccionParaManzana(sb, empresaId, padreId);
+        const { data, error } = await sb
+          .from("loteamiento_manzanas")
+          .insert({
+            empresa_id: empresaId,
+            fraccion_id: fraccionId,
+            codigo,
+            nombre: nombre || null,
+            orden: Number.isFinite(Number(body.orden)) ? Number(body.orden) : 0,
+          })
+          .select()
+          .single();
+        if (error) {
+          if ((error as { code?: string }).code === "23505") {
+            return NextResponse.json(
+              errorResponse(`Ya existe una manzana con el código "${codigo}".`),
+              { status: 409 }
+            );
+          }
+          throw new Error(error.message);
+        }
+        return NextResponse.json(successResponse(data));
+      }
+    }
 
     if (nivel === "loteamiento") {
       fila.nombre = nombre;

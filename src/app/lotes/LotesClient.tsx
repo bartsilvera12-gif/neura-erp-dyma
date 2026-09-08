@@ -121,16 +121,25 @@ export default function LotesClient() {
     [clientes]
   );
 
-  /** Manzanas del loteamiento elegido, con la fracción en la etiqueta. */
+  /**
+   * Manzanas del loteamiento elegido.
+   *
+   * La fracción solo aparece en la etiqueta cuando el loteamiento tiene más de
+   * una: si hay una sola, nombrarla es ruido —el que carga piensa en "Manzana
+   * B", no en "Fracción ÚNICA · Manzana B"—.
+   */
   const manzanasDelLoteamiento = useMemo(() => {
     if (!estructura || !loteamientoId) return [];
     const fracciones = estructura.fracciones.filter((f) => f.loteamiento_id === loteamientoId);
     const porId = new Map(fracciones.map((f) => [f.id, f]));
+    const varias = fracciones.length > 1;
     return estructura.manzanas
       .filter((m) => porId.has(m.fraccion_id))
       .map((m) => ({
         ...m,
-        etiqueta: `Fracción ${porId.get(m.fraccion_id)?.codigo ?? "?"} · Manzana ${m.codigo}`,
+        etiqueta: varias
+          ? `Fracción ${porId.get(m.fraccion_id)?.codigo ?? "?"} · Manzana ${m.codigo}`
+          : `Manzana ${m.codigo}`,
       }));
   }, [estructura, loteamientoId]);
 
@@ -187,8 +196,8 @@ export default function LotesClient() {
           <button
             type="button"
             onClick={() => setModalAlta(true)}
-            disabled={manzanasDelLoteamiento.length === 0}
-            title={manzanasDelLoteamiento.length === 0 ? "Primero creá una manzana en Estructura" : undefined}
+            disabled={!loteamientoId}
+            title={!loteamientoId ? "Elegí primero un loteamiento" : undefined}
             className="inline-flex items-center gap-1.5 rounded-lg bg-[#0EA5E9] px-3.5 py-2 text-xs font-semibold text-white hover:bg-[#0284C7] disabled:opacity-50"
           >
             <Plus className="h-3.5 w-3.5" />
@@ -208,7 +217,7 @@ export default function LotesClient() {
         <div className="rounded-2xl border border-slate-200 bg-white p-8 text-center">
           <p className="text-sm font-medium text-slate-700">Todavía no hay ningún loteamiento cargado.</p>
           <p className="mt-1 text-xs text-slate-500">
-            Empezá creando el loteamiento, sus fracciones y sus manzanas.
+            Empezá creando el loteamiento; las manzanas se cargan después, o directo al crear el primer lote.
           </p>
           <Link
             href="/lotes/estructura"
@@ -355,6 +364,7 @@ export default function LotesClient() {
 
       {modalAlta ? (
         <ModalNuevoLote
+          loteamientoId={loteamientoId}
           manzanas={manzanasDelLoteamiento}
           manzanaPorDefecto={manzanaId || manzanasDelLoteamiento[0]?.id || ""}
           onCancel={() => setModalAlta(false)}
@@ -748,18 +758,26 @@ function PanelLote({
   );
 }
 
+/** Valor especial del selector de manzana: pedir una nueva escribiéndola. */
+const MANZANA_NUEVA = "__nueva__";
+
 function ModalNuevoLote({
+  loteamientoId,
   manzanas,
   manzanaPorDefecto,
   onCancel,
   onSaved,
 }: {
+  loteamientoId: string;
   manzanas: { id: string; etiqueta: string }[];
   manzanaPorDefecto: string;
   onCancel: () => void;
   onSaved: (msg: string) => void | Promise<void>;
 }) {
-  const [manzana, setManzana] = useState(manzanaPorDefecto);
+  // Sin manzanas todavía, se arranca directo en "nueva": es el caso del
+  // loteamiento recién creado, que es donde la gente se quedaba trabada.
+  const [manzana, setManzana] = useState(manzanas.length === 0 ? MANZANA_NUEVA : manzanaPorDefecto);
+  const [manzanaNueva, setManzanaNueva] = useState("");
   const [numero, setNumero] = useState("");
   const [superficie, setSuperficie] = useState("");
   const [frente, setFrente] = useState("");
@@ -778,7 +796,9 @@ function ModalNuevoLote({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          manzana_id: manzana,
+          ...(manzana === MANZANA_NUEVA
+            ? { loteamiento_id: loteamientoId, manzana_codigo: manzanaNueva.trim() }
+            : { manzana_id: manzana }),
           numero,
           superficie_m2: superficie,
           frente_m: frente,
@@ -820,8 +840,24 @@ function ModalNuevoLote({
             <FancySelect
               value={manzana}
               onChange={setManzana}
-              options={manzanas.map((m) => ({ value: m.id, label: m.etiqueta }))}
+              options={[
+                ...manzanas.map((m) => ({ value: m.id, label: m.etiqueta })),
+                { value: MANZANA_NUEVA, label: "+ Manzana nueva…" },
+              ]}
             />
+            {manzana === MANZANA_NUEVA ? (
+              <>
+                <input
+                  value={manzanaNueva}
+                  onChange={(e) => setManzanaNueva(e.target.value)}
+                  placeholder="Ej: B"
+                  className={`${inputClass} mt-2`}
+                />
+                <p className="mt-1 text-[11px] text-slate-400">
+                  Se crea al guardar el lote. Si ya existe una manzana con ese nombre, el lote entra ahí.
+                </p>
+              </>
+            ) : null}
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
@@ -891,7 +927,11 @@ function ModalNuevoLote({
           <button
             type="button"
             onClick={() => void guardar()}
-            disabled={guardando || !manzana || !numero.trim()}
+            disabled={
+              guardando ||
+              !numero.trim() ||
+              (manzana === MANZANA_NUEVA ? !manzanaNueva.trim() : !manzana)
+            }
             className="rounded-xl bg-[#0EA5E9] px-3.5 py-2 text-xs font-semibold text-white hover:bg-[#0284C7] disabled:opacity-50"
           >
             {guardando ? "Creando…" : "Crear lote"}

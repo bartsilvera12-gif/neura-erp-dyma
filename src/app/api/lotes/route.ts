@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { requireLotesModuleAccess } from "@/lib/lotes/lotes-auth";
 import { errorResponse, successResponse } from "@/lib/api/response";
 import { camposLoteDesdeBody } from "@/lib/lotes/lote-campos";
+import { manzanaPorCodigo } from "@/lib/lotes/estructura-implicita";
 import { ESTADOS_LOTE, type EstadoLote, type Lote, type LotesPayload } from "@/lib/lotes/types";
 
 export const dynamic = "force-dynamic";
@@ -132,13 +133,37 @@ export async function POST(request: Request) {
     return NextResponse.json(errorResponse("Body JSON inválido"), { status: 400 });
   }
 
-  const manzanaId = typeof body.manzana_id === "string" ? body.manzana_id.trim() : "";
+  const manzanaIdBody = typeof body.manzana_id === "string" ? body.manzana_id.trim() : "";
+  // Alternativa a manzana_id: el código de la manzana dentro de un loteamiento.
+  // Es la carga que pidió el cliente —manzana, número y dimensiones de una sola
+  // vez— sin tener que ir antes a otra pantalla a dar de alta la manzana.
+  const manzanaCodigo = typeof body.manzana_codigo === "string" ? body.manzana_codigo.trim() : "";
+  const loteamientoId = typeof body.loteamiento_id === "string" ? body.loteamiento_id.trim() : "";
+
   const campos = camposLoteDesdeBody(body);
-  if (!manzanaId) return NextResponse.json(errorResponse("La manzana es obligatoria"), { status: 400 });
+  if (!manzanaIdBody && !(manzanaCodigo && loteamientoId)) {
+    return NextResponse.json(
+      errorResponse("Falta la manzana: mandá manzana_id, o manzana_codigo junto con loteamiento_id."),
+      { status: 400 }
+    );
+  }
   if (!campos.numero) return NextResponse.json(errorResponse("El número de lote es obligatorio"), { status: 400 });
 
   try {
     const { sb, empresaId } = auth;
+    let manzanaId = manzanaIdBody;
+
+    if (!manzanaId) {
+      const { data: lo } = await sb
+        .from("loteamientos")
+        .select("id")
+        .eq("id", loteamientoId)
+        .eq("empresa_id", empresaId)
+        .maybeSingle();
+      if (!lo) return NextResponse.json(errorResponse("Loteamiento no encontrado"), { status: 404 });
+      manzanaId = (await manzanaPorCodigo(sb, empresaId, loteamientoId, manzanaCodigo)).id;
+    }
+
     const { data: mz } = await sb
       .from("loteamiento_manzanas")
       .select("id")
