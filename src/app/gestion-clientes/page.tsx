@@ -144,19 +144,17 @@ function FacturaRowAccionesSifen({
           <FileText className="w-4 h-4" strokeWidth={1.75} />
         </button>
       )}
-      {sifenAprobado ? (
-        <Link
-          href={`/facturas/${facturaId}?print=1`}
-          className={btnBase}
-          title="Imprimir factura"
-        >
-          <Printer className="w-4 h-4" strokeWidth={1.75} />
-        </Link>
-      ) : (
-        <button type="button" disabled title="KuDE solo si SIFEN aprobado" className={`${btnBase} ${disabledCls}`}>
-          <Printer className="w-4 h-4" strokeWidth={1.75} />
-        </button>
-      )}
+      {/* Autoimpresor: no depende de SIFEN. Abre el documento imprimible, no la
+          pantalla del ERP — imprimir la pantalla salía recortado. */}
+      <a
+        href={`/api/facturas/${facturaId}/imprimir?auto=1`}
+        target="_blank"
+        rel="noopener"
+        className={btnBase}
+        title="Imprimir factura"
+      >
+        <Printer className="w-4 h-4" strokeWidth={1.75} />
+      </a>
       {sifenAprobado ? (
         <a href={kudeDl} download title="Descargar PDF" className={btnBase}>
           <FileDown className="w-4 h-4" strokeWidth={1.75} />

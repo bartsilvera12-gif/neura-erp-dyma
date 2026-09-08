@@ -5,6 +5,7 @@ import { useParams, useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useState } from "react";
 import { fetchWithSupabaseSession } from "@/lib/api/fetch-with-supabase-session";
 import { FacturaElectronicaPanel } from "@/components/sifen/FacturaElectronicaPanel";
+import ImprimirFactura from "@/components/facturas/ImprimirFactura";
 import type { FacturaElectronicaDTO, SifenCancelacionPreviewDTO } from "@/lib/sifen/types";
 
 type FacturaApiRow = {
@@ -118,10 +119,11 @@ function FacturaDetalleInner() {
     };
   }, [id]);
 
+  // `?print=1` llegaba desde gestión de clientes y mandaba a imprimir esta
+  // pantalla, que salía recortada. Ahora abre el documento de la factura.
   useEffect(() => {
     if (searchParams?.get("print") === "1" && factura && !loadingF) {
-      const t = setTimeout(() => window.print(), 400);
-      return () => clearTimeout(t);
+      window.location.replace(`/api/facturas/${factura.id}/imprimir?auto=1`);
     }
   }, [searchParams, factura, loadingF]);
 
@@ -177,15 +179,7 @@ function FacturaDetalleInner() {
             </Link>
           </p>
         </div>
-        <div className="flex gap-2 print:hidden">
-          <button
-            type="button"
-            onClick={() => window.print()}
-            className="text-xs font-semibold px-3 py-2 rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-50"
-          >
-            Imprimir
-          </button>
-        </div>
+        <ImprimirFactura facturaId={factura.id} />
       </div>
 
       <div className="rounded-xl border border-slate-200 bg-white shadow-sm p-5 space-y-3">
