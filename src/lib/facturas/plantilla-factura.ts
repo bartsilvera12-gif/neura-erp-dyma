@@ -120,7 +120,7 @@ function filas(lineas: LineaImpresa[], moneda: string): string {
     }
     html.push(`<tr>
       <td class="c">${esc(l.cantidad)}</td>
-      <td class="desc">${esc(l.descripcion)}</td>
+      <td class="desc"><span>${esc(l.descripcion)}</span></td>
       <td class="n">${num(l.precio_unitario, moneda)}</td>
       <td class="n">${l.tasa === 0 ? num(l.importe, moneda) : ""}</td>
       <td class="n">${l.tasa === 5 ? num(l.importe, moneda) : ""}</td>
@@ -190,17 +190,25 @@ function hoja(
     </table>
 
     <table class="detalle">
+      <!-- Los anchos van acá y no en los <th>: con table-layout fijo manda la
+           primera fila, y ahí las tres columnas de venta viven bajo un colspan.
+           Sin colgroup se repartían el espacio en partes iguales y la
+           descripción quedaba en un tercio de lo que le corresponde. -->
+      <colgroup>
+        <col style="width:.62in"><col><col style="width:.95in">
+        <col style="width:.95in"><col style="width:.95in"><col style="width:1.05in">
+      </colgroup>
       <thead>
         <tr>
-          <th rowspan="2" class="w-cant">Cantidad</th>
+          <th rowspan="2">Cantidad</th>
           <th rowspan="2">Clase de mercaderías y/o servicios</th>
-          <th rowspan="2" class="w-pu">Precio<br>Unitario</th>
+          <th rowspan="2">Precio<br>Unitario</th>
           <th colspan="3" class="ventas">V E N T A S</th>
         </tr>
         <tr>
-          <th class="w-col">Exentas</th>
-          <th class="w-col">5%</th>
-          <th class="w-col">10%</th>
+          <th>Exentas</th>
+          <th>5%</th>
+          <th>10%</th>
         </tr>
       </thead>
       <tbody>${filas(lineas, moneda)}</tbody>
@@ -274,7 +282,10 @@ export function plantillaFactura(datos: DatosFactura, opciones?: { autoImprimir?
 
   .cabecera{display:flex;border:1.2px solid #000;min-height:.86in}
   .emisor{flex:1.55;padding:3px 6px;border-right:1.2px solid #000;min-width:0}
-  .emisor .logo{max-height:.34in;max-width:1.7in;object-fit:contain;display:block;margin-bottom:1px}
+  /* Del tamaño que tiene en el talonario. Con tope de alto y de ancho, y sin
+     deformar, porque el logo lo repone el cliente y puede venir apaisado o
+     cuadrado: así entra siempre sin empujar el resto de la cabecera. */
+  .emisor .logo{max-height:.46in;max-width:2.1in;object-fit:contain;display:block;margin-bottom:1px}
   .emisor .logo-txt{font-size:13pt;font-weight:800;letter-spacing:.02em}
   .emisor .razon{font-size:8.5pt;font-weight:800}
   .emisor .actividad{font-size:6pt;font-weight:700;margin-top:1px}
@@ -299,12 +310,14 @@ export function plantillaFactura(datos: DatosFactura, opciones?: { autoImprimir?
   .detalle th,.detalle td{border:.6px solid #000;padding:1px 4px;font-size:7.5pt;vertical-align:top}
   .detalle th{text-align:center;font-weight:700;font-size:7pt;background:#fff}
   .detalle .ventas{letter-spacing:.28em;font-weight:800}
-  .detalle .w-cant{width:.72in} .detalle .w-pu{width:.86in} .detalle .w-col{width:.86in}
   .detalle td.c{text-align:center} .detalle td.n{text-align:right}
   .detalle tr.vacia td{height:.27in}
   /* Dos líneas como máximo: una descripción larguísima no puede empujar el
      renglón siguiente fuera de la media hoja. */
-  .detalle .desc{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;word-break:break-word}
+  /* El recorte va en el span y no en la celda: un td no puede ser -webkit-box
+     (el navegador lo pasa a flow-root) y el limite de lineas no se aplicaba. */
+  .detalle .desc{overflow:hidden}
+  .detalle .desc span{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;word-break:break-word}
   .detalle .sigue{font-style:italic;letter-spacing:.04em}
   .detalle tfoot td{height:.22in;font-weight:700}
   .detalle .rot{font-size:7pt;font-weight:700;text-align:center}
