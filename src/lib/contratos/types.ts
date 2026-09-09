@@ -65,6 +65,8 @@ export interface InmuebleContrato {
   manzana: string | null;
   lote: string | null;
   superficie_m2: number | null;
+  frente_m: number | null;
+  fondo_m: number | null;
   finca_matriz: string | null;
   matricula: string | null;
   cuenta_corriente_catastral: string | null;

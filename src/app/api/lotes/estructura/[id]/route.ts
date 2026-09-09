@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireLotesModuleAccess } from "@/lib/lotes/lotes-auth";
 import { errorResponse, successResponse } from "@/lib/api/response";
-import type { NivelEstructura } from "@/lib/lotes/types";
+import { CAMPOS_REGISTRALES, type NivelEstructura } from "@/lib/lotes/types";
 
 export const dynamic = "force-dynamic";
 
@@ -38,6 +38,15 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
   if (typeof body.descripcion === "string") cambios.descripcion = body.descripcion.trim() || null;
   if (typeof body.activo === "boolean") cambios.activo = body.activo;
   if (Number.isFinite(Number(body.orden))) cambios.orden = Number(body.orden);
+
+  // Datos registrales: solo del loteamiento, y solo los que vengan en el body.
+  // Se guarda null al vaciarlos, no se omiten: borrar un dato mal cargado tiene
+  // que poder hacerse desde la pantalla.
+  if (nivel === "loteamiento") {
+    for (const campo of CAMPOS_REGISTRALES) {
+      if (typeof body[campo] === "string") cambios[campo] = (body[campo] as string).trim() || null;
+    }
+  }
 
   if (Object.keys(cambios).length === 0) {
     return NextResponse.json(errorResponse("Nada para actualizar"), { status: 400 });

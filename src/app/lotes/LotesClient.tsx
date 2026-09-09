@@ -785,6 +785,9 @@ function ModalNuevoLote({
   const [contado, setContado] = useState("");
   const [financiado, setFinanciado] = useState("");
   const [moneda, setMoneda] = useState<MonedaLote>("GS");
+  // Los linderos van en el contrato, así que conviene cargarlos junto con el
+  // lote y no dejarlos para una segunda pasada por la pantalla de edición.
+  const [linderos, setLinderos] = useState({ norte: "", sur: "", este: "", oeste: "" });
   const [guardando, setGuardando] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
@@ -806,6 +809,10 @@ function ModalNuevoLote({
           precio_contado: contado,
           precio_financiado: financiado,
           moneda,
+          lindero_norte: linderos.norte,
+          lindero_sur: linderos.sur,
+          lindero_este: linderos.este,
+          lindero_oeste: linderos.oeste,
         }),
       });
       const json = (await res.json()) as { success?: boolean; error?: string };
@@ -909,6 +916,22 @@ function ModalNuevoLote({
                   { value: "USD", label: "USD" },
                 ]}
               />
+            </div>
+          </div>
+
+          <div>
+            <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-slate-500">Linderos</p>
+            <div className="grid grid-cols-2 gap-3">
+              {(["norte", "sur", "este", "oeste"] as const).map((d) => (
+                <div key={d}>
+                  <label className={labelClass}>Linda al {d}</label>
+                  <input
+                    value={linderos[d]}
+                    onChange={(e) => setLinderos((l) => ({ ...l, [d]: e.target.value }))}
+                    className={inputClass}
+                  />
+                </div>
+              ))}
             </div>
           </div>
         </div>

@@ -2,9 +2,31 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, ChevronRight, Plus, RefreshCw, Trash2, X } from "lucide-react";
+import { ArrowLeft, ChevronRight, Pencil, Plus, RefreshCw, Trash2, X } from "lucide-react";
 import { fetchWithSupabaseSession } from "@/lib/api/fetch-with-supabase-session";
-import type { EstructuraPayload, NivelEstructura } from "@/lib/lotes/types";
+import {
+  CAMPOS_REGISTRALES,
+  type CampoRegistral,
+  type EstructuraPayload,
+  type Loteamiento,
+  type NivelEstructura,
+} from "@/lib/lotes/types";
+
+/**
+ * Los datos registrales como los nombra el título y como salen impresos en el
+ * contrato. El orden es el del formulario y el del documento.
+ */
+const ETIQUETA_REGISTRAL: Record<CampoRegistral, string> = {
+  fraccion: "Fracción",
+  finca_matriz: "Finca Matriz",
+  matricula: "N.º Finca / Matrícula / CUICR",
+  cuenta_corriente_catastral: "Cta. Cte. Catastral",
+  padron: "Padrón",
+  departamento: "Departamento",
+  distrito: "Distrito",
+  resolucion_municipal: "Resolución Municipal de aprobación",
+  run_expediente: "RUN / Expediente",
+};
 
 const inputClass =
   "w-full border border-slate-200 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-[#0EA5E9] focus:outline-none bg-white text-sm";
@@ -22,6 +44,7 @@ export default function EstructuraClient() {
   const [error, setError] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [alta, setAlta] = useState<{ nivel: NivelEstructura; padreId: string; padreLabel: string } | null>(null);
+  const [ficha, setFicha] = useState<Loteamiento | null>(null);
   const [expandidos, setExpandidos] = useState<Set<string>>(new Set());
 
   const showToast = useCallback((msg: string) => {
@@ -97,6 +120,7 @@ export default function EstructuraClient() {
         fracciones,
         manzanas: fracciones.flatMap((f) => f.manzanas),
         variasFracciones: fracciones.length > 1,
+        registralesFaltantes: CAMPOS_REGISTRALES.filter((c) => !String(lo[c] ?? "").trim()).length,
       };
     });
   }, [data]);
@@ -174,6 +198,17 @@ export default function EstructuraClient() {
                   ) : null}
                 </button>
                 <div className="flex items-center gap-2">
+                  {/* Se avisa acá y no al imprimir: para cuando el contrato
+                      está por firmarse, ya es tarde para ir a buscar el título. */}
+                  {lo.registralesFaltantes > 0 ? (
+                    <button
+                      type="button"
+                      onClick={() => setFicha(lo)}
+                      className="rounded-lg border border-amber-200 bg-amber-50 px-2 py-1 text-[11px] font-semibold text-amber-700 hover:bg-amber-100"
+                    >
+                      Faltan {lo.registralesFaltantes} datos del contrato
+                    </button>
+                  ) : null}
                   <span className="text-xs text-slate-500">
                     {lo.manzanas.length} manzana{lo.manzanas.length === 1 ? "" : "s"}
                     {lo.variasFracciones ? ` · ${lo.fracciones.length} fracciones` : ""}
@@ -198,6 +233,14 @@ export default function EstructuraClient() {
                     className="rounded-lg border border-slate-200 px-2 py-1 text-[11px] font-semibold text-slate-500 hover:bg-slate-50"
                   >
                     + Fracción
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setFicha(lo)}
+                    title="Datos registrales para el contrato"
+                    className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+                  >
+                    <Pencil className="h-3.5 w-3.5" />
                   </button>
                   <button
                     type="button"
@@ -304,6 +347,18 @@ export default function EstructuraClient() {
           onCancel={() => setAlta(null)}
           onSaved={async (msg) => {
             setAlta(null);
+            showToast(msg);
+            await load();
+          }}
+        />
+      ) : null}
+
+      {ficha ? (
+        <ModalFichaLoteamiento
+          loteamiento={ficha}
+          onCancel={() => setFicha(null)}
+          onSaved={async (msg) => {
+            setFicha(null);
             showToast(msg);
             await load();
           }}
@@ -436,6 +491,129 @@ function ModalAlta({
             className="rounded-xl bg-[#0EA5E9] px-3.5 py-2 text-xs font-semibold text-white hover:bg-[#0284C7] disabled:opacity-50"
           >
             {guardando ? "Creando…" : "Crear"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * La ficha registral del loteamiento.
+ *
+ * Son los datos que el contrato de compraventa transcribe del título: se cargan
+ * una sola vez acá y salen solos en cada contrato de cualquier lote del
+ * loteamiento. Lo específico de cada lote —manzana, número, superficie, medidas
+ * y linderos— se carga en el lote, no acá.
+ */
+function ModalFichaLoteamiento({
+  loteamiento,
+  onCancel,
+  onSaved,
+}: {
+  loteamiento: Loteamiento;
+  onCancel: () => void;
+  onSaved: (msg: string) => void | Promise<void>;
+}) {
+  const [nombre, setNombre] = useState(loteamiento.nombre ?? "");
+  const [ubicacion, setUbicacion] = useState(loteamiento.ubicacion ?? "");
+  const [registrales, setRegistrales] = useState<Record<string, string>>(() =>
+    Object.fromEntries(CAMPOS_REGISTRALES.map((c) => [c, loteamiento[c] ?? ""]))
+  );
+  const [guardando, setGuardando] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  const set = (campo: string, valor: string) => setRegistrales((r) => ({ ...r, [campo]: valor }));
+
+  async function guardar() {
+    setErr(null);
+    setGuardando(true);
+    try {
+      const res = await fetchWithSupabaseSession(`/api/lotes/estructura/${encodeURIComponent(loteamiento.id)}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ nivel: "loteamiento", nombre, ubicacion, ...registrales }),
+      });
+      const json = (await res.json()) as { success?: boolean; error?: string };
+      if (!res.ok || json.success !== true) throw new Error(json.error ?? `Error ${res.status}`);
+      await onSaved("Ficha del loteamiento guardada.");
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "No se pudo guardar");
+    } finally {
+      setGuardando(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/40 p-4" onClick={onCancel}>
+      <div
+        className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl border border-slate-200 bg-white p-5 shadow-xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h3 className="text-base font-semibold text-slate-900">
+              Ficha de {loteamiento.codigo} — {loteamiento.nombre}
+            </h3>
+            <p className="mt-0.5 text-[11px] text-slate-500">
+              Se carga una vez y sale sola en el contrato de cada lote de este loteamiento.
+            </p>
+          </div>
+          <button type="button" onClick={onCancel} className="rounded-lg p-1 text-slate-400 hover:bg-slate-100">
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+
+        <div className="mt-4 grid gap-3 sm:grid-cols-2">
+          <div>
+            <label className={labelClass}>Nombre</label>
+            <input value={nombre} onChange={(e) => setNombre(e.target.value)} className={inputClass} />
+          </div>
+          <div>
+            <label className={labelClass}>Ubicación</label>
+            <input value={ubicacion} onChange={(e) => setUbicacion(e.target.value)} className={inputClass} />
+          </div>
+        </div>
+
+        <p className="mt-5 text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+          Datos registrales para el contrato
+        </p>
+        <div className="mt-2 grid gap-3 sm:grid-cols-2">
+          {CAMPOS_REGISTRALES.map((campo) => (
+            <div key={campo}>
+              <label className={labelClass}>{ETIQUETA_REGISTRAL[campo]}</label>
+              <input
+                value={registrales[campo] ?? ""}
+                onChange={(e) => set(campo, e.target.value)}
+                className={inputClass}
+              />
+            </div>
+          ))}
+        </div>
+
+        <p className="mt-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-[11px] text-slate-500">
+          Lo propio de cada lote —manzana, número, superficie, frente, fondo y linderos— se carga en el lote.
+          El contrato junta las dos cosas al imprimirse.
+        </p>
+
+        {err ? <p className="mt-3 text-xs text-rose-600">{err}</p> : null}
+
+        <div className="mt-4 flex justify-end gap-2">
+          <button
+            type="button"
+            onClick={onCancel}
+            disabled={guardando}
+            className="rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-50"
+          >
+            Cancelar
+          </button>
+          <button
+            type="button"
+            onClick={() => void guardar()}
+            disabled={guardando || !nombre.trim()}
+            className="rounded-xl bg-[#0EA5E9] px-3.5 py-2 text-xs font-semibold text-white hover:bg-[#0284C7] disabled:opacity-50"
+          >
+            {guardando ? "Guardando…" : "Guardar ficha"}
           </button>
         </div>
       </div>

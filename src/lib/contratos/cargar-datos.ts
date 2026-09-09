@@ -1,5 +1,6 @@
 import "server-only";
 import { leerLogoInstancia } from "@/lib/documentos/logo-instancia";
+import { FRACCION_UNICA } from "@/lib/lotes/estructura-implicita";
 import type { AppSupabaseClient } from "@/lib/supabase/schema";
 import type {
   ContratoConfig,
@@ -12,6 +13,26 @@ import type {
 
 function ymd(v: unknown): string {
   return String(v ?? "").slice(0, 10);
+}
+
+/**
+ * La fracción que va escrita en el contrato.
+ *
+ * Manda el dato registral del loteamiento. Si todavía no se cargó, se cae a la
+ * subdivisión operativa —que a veces coincide— salvo cuando es la que el
+ * sistema crea solo para poder colgar manzanas: esa no existe en ningún título
+ * y no puede terminar impresa.
+ */
+export function fraccionRegistral(
+  loteamiento: Record<string, unknown> | null,
+  fraccion: Record<string, unknown> | null
+): string | null {
+  const registral = String(loteamiento?.fraccion ?? "").trim();
+  if (registral) return registral;
+
+  const operativa = String(fraccion?.nombre ?? "").trim() || String(fraccion?.codigo ?? "").trim();
+  if (!operativa) return null;
+  return operativa.toLocaleUpperCase("es") === FRACCION_UNICA ? null : operativa;
 }
 
 /** Nombre visible del cliente: razón social si es empresa, si no el contacto. */
@@ -157,10 +178,16 @@ export async function cargarDatosContrato(
 
   const inmueble: InmuebleContrato = {
     loteamiento: (loteamiento?.nombre as string) ?? null,
-    fraccion: (fraccion?.nombre as string) || (fraccion?.codigo as string) || null,
+    // La fracción del contrato es la registral, cargada una vez en el
+    // loteamiento. La subdivisión operativa solo se usa como respaldo, y nunca
+    // la que el sistema crea solo: imprimir "Fracción ÚNICA" en un contrato
+    // sería inventar un dato del título.
+    fraccion: fraccionRegistral(loteamiento, fraccion),
     manzana: (manzana?.nombre as string) || (manzana?.codigo as string) || null,
     lote: (lote?.numero as string) ?? null,
     superficie_m2: lote?.superficie_m2 == null ? null : Number(lote.superficie_m2),
+    frente_m: lote?.frente_m == null ? null : Number(lote.frente_m),
+    fondo_m: lote?.fondo_m == null ? null : Number(lote.fondo_m),
     finca_matriz: (loteamiento?.finca_matriz as string) ?? null,
     matricula: (loteamiento?.matricula as string) ?? null,
     cuenta_corriente_catastral: (loteamiento?.cuenta_corriente_catastral as string) ?? null,

@@ -247,6 +247,8 @@ ${codeudoresHtml}
   ${filaDato("Manzana", inmueble.manzana)}
   ${filaDato("Lote", inmueble.lote)}
   ${filaDato("Superficie (m²)", inmueble.superficie_m2 ? `${inmueble.superficie_m2}` : "")}
+  ${filaDato("Frente (m)", inmueble.frente_m ? `${inmueble.frente_m}` : "")}
+  ${filaDato("Fondo (m)", inmueble.fondo_m ? `${inmueble.fondo_m}` : "")}
   ${filaDato("Finca Matriz", inmueble.finca_matriz)}
   ${filaDato("N°/Finca/Matrícula/CUICR", inmueble.matricula)}
   ${filaDato("Cta. Cte. Catastral / Padrón", [inmueble.cuenta_corriente_catastral, inmueble.padron].filter(Boolean).join(" / "))}

@@ -34,7 +34,24 @@ export const ESTADO_LOTE_UI: Record<
   },
 };
 
-export interface Loteamiento {
+/** Datos registrales del loteamiento: se cargan una vez y los usa el contrato. */
+export const CAMPOS_REGISTRALES = [
+  'fraccion',
+  'finca_matriz',
+  'matricula',
+  'cuenta_corriente_catastral',
+  'padron',
+  'departamento',
+  'distrito',
+  'resolucion_municipal',
+  'run_expediente',
+] as const;
+
+export type CampoRegistral = (typeof CAMPOS_REGISTRALES)[number];
+
+export type DatosRegistrales = { [K in CampoRegistral]: string | null };
+
+export interface Loteamiento extends DatosRegistrales {
   id: string;
   codigo: string;
   nombre: string;
