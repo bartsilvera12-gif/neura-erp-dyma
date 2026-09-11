@@ -36,11 +36,6 @@ import { useFacturaSifenEstados } from "@/hooks/useFacturaSifenEstados";
 import MontoInput from "@/components/ui/MontoInput";
 import { getPlanes } from "@/lib/planes/storage";
 import type { Cliente, NotaCliente } from "@/lib/clientes/types";
-import {
-  etiquetaVisibleTipoServicio,
-  type ClienteTipoServicioRow,
-} from "@/lib/clientes/tipo-servicio-catalogo";
-import { filasTiposDesdeSistemaEstatico, fetchTiposFormCliente } from "@/lib/clientes/fetch-tipos-servicio-form";
 import type { Factura } from "@/lib/gestion-clientes/types";
 import {
   clasesBadgeEstadoFacturaUi,
@@ -197,7 +192,6 @@ export default function ClienteDetailPage() {
     moneda_preferida:      "GS" as "GS" | "USD",
     vendedor_asignado:     "",
     vendedor_usuario_id:   "",
-    tipo_servicio_cliente: "" as string,
     estado:                "activo" as Cliente["estado"],
     sifen_receptor_manual: false,
     sifen_receptor_naturaleza: "" as string,
@@ -267,33 +261,6 @@ export default function ClienteDetailPage() {
    *  para tenants erp_* no expuestos) y el botón parecía "no hacer nada". Ahora exponemos el motivo. */
   const [errorFacturaContado, setErrorFacturaContado] = useState<string | null>(null);
 
-  const [filasTiposServicio, setFilasTiposServicio] = useState<ClienteTipoServicioRow[]>(() => filasTiposDesdeSistemaEstatico());
-  const labelTipoServicioMap = useMemo(() => {
-    const m: Record<string, string> = {};
-    for (const t of filasTiposServicio) m[t.slug] = t.nombre;
-    return m;
-  }, [filasTiposServicio]);
-  const opcionesTipoServicio = useMemo(() => {
-    const t = (form.tipo_servicio_cliente ?? "").trim();
-    const list = filasTiposServicio;
-    if (!t) return list;
-    if (list.some((f) => f.slug === t)) return list;
-    return [
-      ...list,
-      {
-        id: `ghost-${t}`,
-        empresa_id: "",
-        slug: t,
-        nombre: etiquetaVisibleTipoServicio(t, labelTipoServicioMap),
-        activo: false,
-        orden: 0,
-        es_sistema: false,
-        created_at: "",
-        updated_at: "",
-      } satisfies ClienteTipoServicioRow,
-    ];
-  }, [form.tipo_servicio_cliente, filasTiposServicio, labelTipoServicioMap]);
-
   const sifenPorFactura = useFacturaSifenEstados(facturas.map((f) => f.id));
   const suscripcionActiva = useMemo(
     () => suscripciones.find((s) => s.estado === "activa") ?? null,
@@ -304,12 +271,6 @@ export default function ClienteDetailPage() {
     const d = new Date();
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
   }, []);
-
-  useEffect(() => {
-    if (!id) return;
-    const inc = (form.tipo_servicio_cliente || cliente?.tipo_servicio_cliente || "").trim() || null;
-    void fetchTiposFormCliente(inc).then(setFilasTiposServicio);
-  }, [id, form.tipo_servicio_cliente, cliente?.tipo_servicio_cliente]);
 
   const cargar = useCallback(async () => {
     setCargandoCliente(true);
@@ -355,7 +316,6 @@ export default function ClienteDetailPage() {
         moneda_preferida:     c.moneda_preferida    ?? "GS",
         vendedor_asignado:    c.vendedor_asignado   ?? "",
         vendedor_usuario_id:  c.vendedor_usuario_id ?? "",
-        tipo_servicio_cliente: c.tipo_servicio_cliente ?? "",
         estado:               c.estado,
         sifen_receptor_manual: Boolean(c.sifen_receptor_manual),
         sifen_receptor_naturaleza: c.sifen_receptor_naturaleza ?? "",
@@ -590,7 +550,6 @@ export default function ClienteDetailPage() {
       }
     }
 
-    const tipoTs = (form.tipo_servicio_cliente || "").trim().toLowerCase();
     const sifenManualPayload = form.sifen_receptor_manual
       ? ({
           sifen_receptor_manual: true,
@@ -638,17 +597,11 @@ export default function ClienteDetailPage() {
         moneda_preferida:    form.moneda_preferida,
         vendedor_asignado:   form.vendedor_asignado.trim().toUpperCase() || null,
         vendedor_usuario_id: form.vendedor_usuario_id.trim() || null,
-        tipo_servicio_cliente: tipoTs || null,
         estado:              form.estado,
         ...sifenManualPayload,
       });
     } catch (err) {
       const m = err instanceof Error ? err.message : String(err);
-      if (/inexistente|inexistente en el cat|catálogo/i.test(m) || /check constraint/i.test(m) || m.includes("23514")) {
-        return setFormError(
-          "Ese «Tipo de servicio» no está en el catálogo CRM de tu empresa (o la base lo rechazó). Configuración → CRM → tipos/segmento: creá el tipo con el mismo identificador (slug), o elegí un tipo de la lista actualizada, y guardá de nuevo."
-        );
-      }
       return setFormError(m || "No se pudo guardar el cliente.");
     }
 
@@ -1461,24 +1414,6 @@ export default function ClienteDetailPage() {
                       </button>
                     ))}
                   </div>
-                </div>
-
-                <div>
-                  <label className={labelClass}>Tipo de servicio</label>
-                  <select
-                    name="tipo_servicio_cliente"
-                    value={form.tipo_servicio_cliente}
-                    onChange={handleChange}
-                    className={inputClass}
-                  >
-                    <option value="">— Ninguno —</option>
-                    {opcionesTipoServicio.map((f) => (
-                      <option key={f.slug} value={f.slug}>
-                        {f.nombre}
-                        {!f.activo && (form.tipo_servicio_cliente || "").trim() === f.slug ? " (inactivo)" : ""}
-                      </option>
-                    ))}
-                  </select>
                 </div>
 
                 {form.tipo_cliente === "empresa" && (

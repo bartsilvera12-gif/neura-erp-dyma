@@ -23,8 +23,6 @@ import { getUsuariosActivosEmpresa, type UsuarioEmpresa } from "@/lib/usuarios/e
 import MontoInput from "@/components/ui/MontoInput";
 import { getPlanes } from "@/lib/planes/storage";
 import type { Cliente, TipoCliente, OrigenCliente } from "@/lib/clientes/types";
-import type { ClienteTipoServicioRow } from "@/lib/clientes/tipo-servicio-catalogo";
-import { filasTiposDesdeSistemaEstatico, fetchTiposFormCliente } from "@/lib/clientes/fetch-tipos-servicio-form";
 import type { Plan } from "@/lib/planes/types";
 
 // ── Estilos ────────────────────────────────────────────────────────────────────
@@ -78,7 +76,6 @@ function NuevoClienteForm() {
     vendedor_usuario_id: "",
     origen:              "MANUAL" as OrigenCliente,
     prospecto_id:          null as string | null,
-    tipo_servicio_cliente: "" as string,
     estado:                "activo" as "activo" | "inactivo",
     sifen_receptor_manual: false,
     sifen_receptor_naturaleza: "" as string,
@@ -113,7 +110,6 @@ function NuevoClienteForm() {
     { id: string; slug: string; nombre: string; requiere_detalle_otro: boolean }[]
   >([]);
   const [formTributario, setFormTributario] = useState<TributarioFormState>(() => emptyTributarioForm());
-  const [filasTipoServicio, setFilasTipoServicio] = useState<ClienteTipoServicioRow[]>(() => filasTiposDesdeSistemaEstatico());
 
   useEffect(() => {
     getPlanes().then(setPlanes);
@@ -136,10 +132,6 @@ function NuevoClienteForm() {
     return () => {
       cancelled = true;
     };
-  }, []);
-
-  useEffect(() => {
-    void fetchTiposFormCliente().then(setFilasTipoServicio);
   }, []);
 
   useEffect(() => {
@@ -306,7 +298,6 @@ function NuevoClienteForm() {
 
     const creado = await apiCreateCliente({
       tipo_cliente: form.tipo_cliente,
-      tipo_servicio_cliente: form.tipo_servicio_cliente || undefined,
       empresa: form.tipo_cliente === "empresa" ? form.empresa.trim().toUpperCase() : undefined,
       nombre_contacto: form.nombre_contacto.trim().toUpperCase(),
       ruc: form.ruc.trim() || undefined,
@@ -392,7 +383,6 @@ function NuevoClienteForm() {
   // ── Campos ocultados a pedido del negocio (DYMA) ────────────────────────
   // Se ocultan de la interfaz sin borrar la lógica: los estados conservan sus
   // valores por defecto y el alta sigue funcionando. Poner en `true` para reactivar.
-  const MOSTRAR_TIPO_SERVICIO = false;
   const MOSTRAR_DATOS_COMERCIALES = false;
   const MOSTRAR_PERFIL_TRIBUTARIO = false;
 
@@ -461,25 +451,6 @@ function NuevoClienteForm() {
                   className={`${inputClass} uppercase`}
                 />
               </div>
-            )}
-
-            {MOSTRAR_TIPO_SERVICIO && (
-            <div>
-              <label className={labelClass}>Tipo de servicio</label>
-              <select
-                name="tipo_servicio_cliente"
-                value={form.tipo_servicio_cliente}
-                onChange={(e) => setForm((prev) => ({ ...prev, tipo_servicio_cliente: e.target.value }))}
-                className={inputClass}
-              >
-                <option value="">— Ninguno —</option>
-                {filasTipoServicio.map((f) => (
-                  <option key={f.slug} value={f.slug}>
-                    {f.nombre}
-                  </option>
-                ))}
-              </select>
-            </div>
             )}
 
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
