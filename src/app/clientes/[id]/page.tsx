@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { AlertTriangle, Clock, FolderOpen } from "lucide-react";
+import { AlertTriangle } from "lucide-react";
 import DocumentosCliente from "@/components/clientes/DocumentosCliente";
 import { useParams, useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
@@ -82,15 +82,13 @@ function SectionTitle({ children }: { children: React.ReactNode }) {
 
 // ── Tipos de pestaña ──────────────────────────────────────────────────────────
 
-type TabId = "informacion" | "estado_cuenta" | "suscripciones" | "marketing" | "proyectos" | "actividad" | "notas";
+type TabId = "informacion" | "estado_cuenta" | "suscripciones" | "marketing" | "notas";
 
 const TABS: { id: TabId; label: string; showWhen?: (c: Cliente) => boolean }[] = [
   { id: "informacion",   label: "Información"      },
   { id: "estado_cuenta", label: "Estado de cuenta" },
   { id: "suscripciones", label: "Suscripciones"    },
   { id: "marketing",     label: "Marketing",        showWhen: (c) => c.tipo_servicio_cliente === "marketing" },
-  { id: "proyectos",     label: "Proyectos"         },
-  { id: "actividad",     label: "Actividad"         },
   { id: "notas",         label: "Notas"             },
 ];
 
@@ -108,19 +106,6 @@ function formatFechaHora(iso: string) {
     const d = new Date(iso);
     return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()} ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
   } catch { return ""; }
-}
-
-// ── Placeholder para pestañas futuras ─────────────────────────────────────────
-
-function PlaceholderTab({ icon, title, desc }: { icon: ReactNode; title: string; desc: string }) {
-  return (
-    <div className="flex flex-col items-center justify-center py-20 text-center">
-      <span className="text-5xl mb-4">{icon}</span>
-      <h3 className="text-base font-semibold text-gray-600 mb-2">{title}</h3>
-      <p className="text-sm text-gray-400 max-w-xs">{desc}</p>
-      <span className="mt-5 text-xs bg-gray-100 text-gray-500 px-3 py-1.5 rounded-full">Próximamente</span>
-    </div>
-  );
 }
 
 function ClienteFichaSkeleton() {
@@ -1076,17 +1061,10 @@ export default function ClienteDetailPage() {
         </div>
 
         {/* Estadísticas rápidas */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 divide-x divide-gray-100 border-t border-gray-100">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 divide-x divide-gray-100 border-t border-gray-100">
           {(
             [
               { label: "Origen", value: cliente.origen },
-              {
-                label: "Tipo servicio",
-                value: etiquetaVisibleTipoServicio(
-                  cliente.tipo_servicio_cliente ?? null,
-                  labelTipoServicioMap
-                ),
-              },
               { label: "Condición", value: cliente.condicion_pago ?? "—" },
               {
                 label: "Plan activo",
@@ -2191,24 +2169,6 @@ export default function ClienteDetailPage() {
                 </div>
               )}
             </div>
-          )}
-
-          {/* ── PROYECTOS ────────────────────────────────────────────────── */}
-          {activeTab === "proyectos" && (
-            <PlaceholderTab
-              icon={<FolderOpen className="h-4 w-4" />}
-              title="Proyectos"
-              desc="Proyectos en curso y finalizados asociados a este cliente, con etapas y responsables."
-            />
-          )}
-
-          {/* ── ACTIVIDAD ────────────────────────────────────────────────── */}
-          {activeTab === "actividad" && (
-            <PlaceholderTab
-              icon={<Clock className="h-4 w-4" />}
-              title="Actividad"
-              desc="Timeline completo de interacciones, cambios de estado, ventas y eventos del cliente."
-            />
           )}
 
           {/* ── NOTAS ───────────────────────────────────────────────────── */}
