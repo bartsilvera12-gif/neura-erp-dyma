@@ -210,7 +210,7 @@ export async function cargarDatosContrato(
   // que el comprador va a pagar, incluida la última cuota con su redondeo.
   const { data: cuotasRaw } = await sb
     .from("lote_venta_cuotas")
-    .select("numero, vencimiento, capital, interes, total")
+    .select("numero, vencimiento, capital, interes, total, saldo, estado, pagada_at")
     .eq("venta_id", id)
     .eq("empresa_id", empresaId)
     .order("numero");
@@ -221,6 +221,9 @@ export async function cargarDatosContrato(
     capital: Number(c.capital ?? 0),
     interes: Number(c.interes ?? 0),
     total: Number(c.total ?? 0),
+    estado: c.estado === "pagada" || c.estado === "anulada" ? c.estado : "pendiente",
+    saldo: c.saldo == null ? undefined : Number(c.saldo),
+    pagada_at: (c.pagada_at as string) ?? null,
   }));
 
   const datos: DatosContrato = {

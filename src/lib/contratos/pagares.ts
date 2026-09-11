@@ -16,6 +16,19 @@ import type { CuotaContrato } from "./types";
  * Función pura: se prueba sin base ni red.
  */
 
+/**
+ * Dónde está parado cada pagaré respecto de lo que cubre.
+ *
+ * - vigente:   no se cobró nada de sus cuotas.
+ * - parcial:   se cobró algo, pero todavía se debe.
+ * - cancelado: todas sus cuotas están pagadas. Hay que devolvérselo al deudor:
+ *              un pagaré cancelado que queda en poder del acreedor sigue siendo
+ *              un título ejecutable en su contra.
+ * - anulado:   ninguna cuota quedó pendiente, pero tampoco se pagó ninguna —
+ *              se anularon. No se rotula como cancelado porque no lo es.
+ */
+export type EstadoPagare = "vigente" | "parcial" | "cancelado" | "anulado";
+
 export interface Pagare {
   /** Identidad estable, derivada del contrato: CTR-000002/1. */
   numero: string;
@@ -27,8 +40,47 @@ export interface Pagare {
   vencimiento: string;
   /** Números de cuota incluidos, para que el documento pueda detallarlos. */
   cuotas: number[];
-  /** Suma de las cuotas del período. */
+  /** Suma de las cuotas del período. Es lo que dice el pagaré firmado. */
   monto: number;
+  estado: EstadoPagare;
+  cuotas_pagadas: number;
+  /** Lo que todavía se debe de este pagaré. */
+  saldo: number;
+  /** Día en que se pagó la última de sus cuotas. Solo si está cancelado. */
+  cancelado_el: string | null;
+}
+
+/** Arma un pagaré a partir de las cuotas que cubre. */
+function armarPagare(numeroContrato: string, orden: number, lista: CuotaContrato[]): Pagare {
+  const estadoDe = (c: CuotaContrato) => c.estado ?? "pendiente";
+  const pendientes = lista.filter((c) => estadoDe(c) === "pendiente");
+  const pagadas = lista.filter((c) => estadoDe(c) === "pagada");
+  const saldo = pendientes.reduce((a, c) => a + (c.saldo ?? c.total), 0);
+  // Una cuota pendiente con saldo menor al total ya recibió un pago parcial.
+  const hayPagoParcial = pendientes.some((c) => c.saldo !== undefined && c.saldo < c.total);
+
+  let estado: EstadoPagare;
+  if (pendientes.length === 0) estado = pagadas.length > 0 ? "cancelado" : "anulado";
+  else if (pagadas.length > 0 || hayPagoParcial) estado = "parcial";
+  else estado = "vigente";
+
+  const fechasPago = pagadas
+    .map((c) => String(c.pagada_at ?? "").slice(0, 10))
+    .filter(Boolean)
+    .sort();
+
+  return {
+    numero: `${numeroContrato}/${orden}`,
+    orden,
+    desde: lista[0]!.vencimiento,
+    vencimiento: lista[lista.length - 1]!.vencimiento,
+    cuotas: lista.map((c) => c.numero),
+    monto: lista.reduce((a, c) => a + c.total, 0),
+    estado,
+    cuotas_pagadas: pagadas.length,
+    saldo,
+    cancelado_el: estado === "cancelado" ? fechasPago[fechasPago.length - 1] ?? null : null,
+  };
 }
 
 /** Meses completos entre dos fechas YYYY-MM-DD, contando el día. */
@@ -68,14 +120,18 @@ export function generarPagares(
 
   return [...grupos.entries()]
     .sort((a, b) => a[0] - b[0])
-    .map(([periodo, lista], i) => ({
-      numero: `${numeroContrato}/${i + 1}`,
-      orden: i + 1,
-      desde: lista[0]!.vencimiento,
-      vencimiento: lista[lista.length - 1]!.vencimiento,
-      cuotas: lista.map((c) => c.numero),
-      monto: lista.reduce((a, c) => a + c.total, 0),
-      _periodo: periodo,
-    }))
-    .map(({ _periodo, ...p }) => p);
+    .map(([, lista], i) => armarPagare(numeroContrato, i + 1, lista));
+}
+
+/**
+ * Un pagaré por cuota.
+ *
+ * No es lo mismo que agrupar por un mes: con cuotas quincenales, un pagaré
+ * mensual cubriría dos. Acá es literalmente uno por cuota, sea cual sea la
+ * frecuencia del plan, y el número del pagaré coincide con el de la cuota.
+ */
+export function generarPagaresPorCuota(numeroContrato: string, cuotas: CuotaContrato[]): Pagare[] {
+  return [...cuotas]
+    .sort((a, b) => a.numero - b.numero)
+    .map((c) => armarPagare(numeroContrato, c.numero, [c]));
 }

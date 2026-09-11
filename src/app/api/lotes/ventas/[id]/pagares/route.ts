@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireLotesModuleAccess } from "@/lib/lotes/lotes-auth";
 import { cargarDatosContrato } from "@/lib/contratos/cargar-datos";
-import { generarPagares } from "@/lib/contratos/pagares";
+import { generarPagares, generarPagaresPorCuota } from "@/lib/contratos/pagares";
 import { plantillaPagares } from "@/lib/contratos/plantilla-pagares";
 
 export const dynamic = "force-dynamic";
@@ -23,6 +23,8 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
   const { id } = await ctx.params;
   const url = new URL(request.url);
   const auto = url.searchParams.get("auto") === "1";
+  // ?modo=cuota → un pagaré por cuota. Si no, se agrupan por período (anual).
+  const porCuota = url.searchParams.get("modo") === "cuota";
   const mesesRaw = Number(url.searchParams.get("meses"));
   const meses = Number.isFinite(mesesRaw) && mesesRaw >= 1 ? Math.trunc(mesesRaw) : 12;
 
@@ -30,8 +32,14 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
     const datos = await cargarDatosContrato(auth.sb, auth.empresaId, id);
     if (!datos) return new NextResponse("Contrato no encontrado", { status: 404 });
 
-    const pagares = generarPagares(datos.operacion.numero_contrato, datos.cuotas, meses);
-    const html = plantillaPagares(datos, pagares, { autoImprimir: auto });
+    const numero = datos.operacion.numero_contrato;
+    const pagares = porCuota
+      ? generarPagaresPorCuota(numero, datos.cuotas)
+      : generarPagares(numero, datos.cuotas, meses);
+    const html = plantillaPagares(datos, pagares, {
+      autoImprimir: auto,
+      titulo: porCuota ? "Pagarés por cuota" : "Pagarés anuales",
+    });
     return new NextResponse(html, {
       status: 200,
       headers: { "Content-Type": "text/html; charset=utf-8" },

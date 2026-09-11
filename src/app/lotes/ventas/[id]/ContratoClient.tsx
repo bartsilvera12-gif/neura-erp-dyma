@@ -119,16 +119,30 @@ export default function ContratoClient({ ventaId }: { ventaId: string }) {
             Actualizar
           </button>
           {data.cuotas.length > 0 ? (
-            <a
-              href={`/api/lotes/ventas/${data.id}/pagares`}
-              target="_blank"
-              rel="noopener"
-              title="Un pagaré por cada año del plan"
-              className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50"
-            >
-              <Printer className="h-3.5 w-3.5" />
-              Pagarés
-            </a>
+            <>
+              {/* Los dos juegos salen con el sello CANCELADO en los que ya se
+                  pagaron enteros, para saber cuál devolver al cliente. */}
+              <a
+                href={`/api/lotes/ventas/${data.id}/pagares`}
+                target="_blank"
+                rel="noopener"
+                title="Un pagaré por cada año del plan"
+                className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50"
+              >
+                <Printer className="h-3.5 w-3.5" />
+                Pagarés anuales
+              </a>
+              <a
+                href={`/api/lotes/ventas/${data.id}/pagares?modo=cuota`}
+                target="_blank"
+                rel="noopener"
+                title="Un pagaré por cada cuota del plan"
+                className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50"
+              >
+                <Printer className="h-3.5 w-3.5" />
+                Pagarés por cuota
+              </a>
+            </>
           ) : null}
           <a
             href={`/api/lotes/ventas/${data.id}/contrato`}

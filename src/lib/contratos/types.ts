@@ -102,6 +102,15 @@ export interface CuotaContrato {
   capital: number;
   interes: number;
   total: number;
+  /**
+   * Estado de cobro. Opcional: el contrato y el plan no lo necesitan, los
+   * pagarés sí, para saber cuáles ya se pueden devolver. Sin dato se toma
+   * como pendiente por el total, que es lo seguro.
+   */
+  estado?: "pendiente" | "pagada" | "anulada";
+  /** Lo que resta de la cuota. Menor al total si hubo pagos parciales. */
+  saldo?: number;
+  pagada_at?: string | null;
 }
 
 /** Todo lo que necesita la plantilla para armar el documento. */
