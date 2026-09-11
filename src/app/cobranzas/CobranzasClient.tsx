@@ -30,6 +30,9 @@ type ServicioCobranza = {
   meses_adeudados: string[];
   tramo: TramoKey;
   proximo_vencimiento: string | null;
+  /** Solo contratos de lote. */
+  venta_id?: string | null;
+  mora?: number;
 };
 
 type ClienteCobranza = {
@@ -69,6 +72,8 @@ type FacturaLite = {
   estado: string | null;
   tipo: string | null;
   vencida: boolean;
+  /** Cuota de lote sin factura: se cobra en el contrato, no con Registrar pago. */
+  origen?: "cuota_lote";
 };
 type PagoLite = { numero_factura: string | null; fecha_pago: string | null; monto: number; metodo_pago: string | null };
 type ServicioDetalle = ServicioCobranza & {
@@ -342,7 +347,9 @@ export default function CobranzasClient() {
   /** Cuota más vieja pendiente del cliente abierto (oldest-first): venc → emisión → número. */
   const oldestPayable = useMemo(() => {
     if (!detalle) return null;
-    const all = [...detalle.facturas_vencidas, ...detalle.facturas_pendientes];
+    const all = [...detalle.facturas_vencidas, ...detalle.facturas_pendientes].filter(
+      (f) => f.origen !== "cuota_lote"
+    );
     if (all.length === 0) return null;
     const numInt = (n: string | null | undefined) => {
       const m = String(n ?? "").replace(/\D/g, "");
@@ -777,7 +784,7 @@ export default function CobranzasClient() {
                   </p>
                   <div className="space-y-3">
                     {detalle.servicios.map((s) => (
-                      <div key={s.suscripcion_id ?? "general"} className="rounded-xl border border-slate-200 p-3">
+                      <div key={s.venta_id ?? s.suscripcion_id ?? "general"} className="rounded-xl border border-slate-200 p-3">
                         <div className="flex flex-wrap items-center justify-between gap-2">
                           <div className="min-w-0">
                             <span className="text-sm font-semibold text-slate-900">{s.tipo}</span>
@@ -786,6 +793,11 @@ export default function CobranzasClient() {
                           <div className="flex items-center gap-2">
                             <TramoBadge tramo={s.tramo} />
                             <span className="text-sm font-semibold tabular-nums text-rose-700">{fmtMoney(s.total_adeudado)}</span>
+                            {s.mora && s.mora > 0 ? (
+                              <span className="text-xs font-medium tabular-nums text-rose-600" title="Mora a hoy, además de las cuotas">
+                                + mora {fmtMoney(s.mora)}
+                              </span>
+                            ) : null}
                           </div>
                         </div>
                         <div className="mt-2">
@@ -794,6 +806,7 @@ export default function CobranzasClient() {
                             facturas={s.facturas_vencidas}
                             puedeRegistrar={puedeRegistrar}
                             onRegistrar={(f) => setPagoFactura(f)}
+                            ventaId={s.venta_id ?? null}
                             oldestId={oldestPayable?.id ?? null}
                             oldestNumero={oldestPayable?.numero_factura ?? null}
                           />
@@ -939,6 +952,7 @@ function DetalleSeccion({
   onRegistrar,
   oldestId,
   oldestNumero,
+  ventaId,
 }: {
   titulo: string;
   facturas: FacturaLite[];
@@ -946,6 +960,7 @@ function DetalleSeccion({
   onRegistrar: (f: FacturaLite) => void;
   oldestId: string | null;
   oldestNumero: string | null;
+  ventaId?: string | null;
 }) {
   return (
     <div>
@@ -961,7 +976,17 @@ function DetalleSeccion({
               </span>
               <span className="flex shrink-0 items-center gap-2">
                 <span className="font-semibold tabular-nums text-slate-800">{fmtMoney(f.saldo)}</span>
-                {puedeRegistrar ? (
+                {f.origen === "cuota_lote" ? (
+                  ventaId ? (
+                    <Link
+                      href={`/lotes/ventas/${ventaId}`}
+                      title="La cuota se cobra en el contrato, que calcula la mora y emite la factura"
+                      className="rounded-lg border border-[#4FAEB2]/40 bg-[#4FAEB2]/10 px-2 py-1 text-[10px] font-semibold text-[#3F8E91] hover:bg-[#4FAEB2]/20"
+                    >
+                      Cobrar en el contrato
+                    </Link>
+                  ) : null
+                ) : puedeRegistrar ? (
                   f.id === oldestId ? (
                     <button
                       type="button"

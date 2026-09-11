@@ -2,6 +2,12 @@ import "server-only";
 import type { getChatServiceClientForEmpresa } from "@/lib/supabase/chat-service-role-empresa";
 import { etiquetaVisibleTipoServicio } from "@/lib/clientes/tipo-servicio-catalogo";
 import { telefonoSignificativo } from "@/lib/telefono";
+import {
+  gruposCuotasLote,
+  type CuotaLoteFila,
+  type GrupoCuotasLote,
+  type VentaLoteFila,
+} from "@/lib/cobranzas/cuotas-lote";
 
 type Sb = Awaited<ReturnType<typeof getChatServiceClientForEmpresa>>;
 
@@ -29,6 +35,10 @@ export type ServicioCobranza = {
   meses_adeudados: string[]; // por mes de vencimiento
   tramo: TramoKey;
   proximo_vencimiento: string | null;
+  /** Solo contratos de lote: el contrato, para ir a cobrar la cuota ahí. */
+  venta_id?: string | null;
+  /** Solo contratos de lote: mora a hoy, aparte de la deuda de las cuotas. */
+  mora?: number;
 };
 
 export type ClienteCobranza = {
@@ -70,6 +80,12 @@ export type FacturaLite = {
   estado: string | null;
   tipo: string | null;
   vencida: boolean;
+  /**
+   * "cuota_lote" = cuota de un contrato que todavía no tiene factura. No se le
+   * puede registrar un pago como a una factura: se cobra desde el contrato,
+   * que calcula la mora y emite la factura en el momento.
+   */
+  origen?: "cuota_lote";
 };
 
 export type PagoLite = { factura_id: string; numero_factura: string | null; fecha_pago: string | null; monto: number; metodo_pago: string | null };
@@ -341,6 +357,108 @@ function aggServicio(g: GrupoServicio): ServicioCobranza {
   };
 }
 
+/** Último día del mes de `hoyYmd`, como YYYY-MM-DD. */
+function finDeMes(hoyYmd: string): string {
+  const [y, m] = hoyYmd.split("-").map(Number);
+  const ultimo = new Date(Date.UTC(y!, m!, 0)).getUTCDate();
+  return `${hoyYmd.slice(0, 7)}-${String(ultimo).padStart(2, "0")}`;
+}
+
+/**
+ * Deuda de los contratos de lotes, por cliente.
+ *
+ * Se pide filtrada desde la base —pendientes, sin factura, con vencimiento
+ * hasta fin de mes— para no traer todas las cuotas futuras de todos los
+ * contratos. Las reglas de negocio viven en `gruposCuotasLote`.
+ *
+ * Si algo falla, devuelve vacío en vez de tumbar Cobranzas: la deuda por
+ * facturas tiene que seguir viéndose aunque esta parte no cargue.
+ */
+async function cargarCuotasLotePorCliente(
+  sb: Sb,
+  empresaId: string,
+  hoyYmd: string,
+  soloCliente?: string
+): Promise<Map<string, GrupoCuotasLote[]>> {
+  try {
+    let qv = sb
+      .from("lote_ventas")
+      .select("id, cliente_id, numero_contrato, estado, dias_gracia, lote_id")
+      .eq("empresa_id", empresaId)
+      .eq("estado", "vigente");
+    if (soloCliente) qv = qv.eq("cliente_id", soloCliente);
+    const { data: vRows, error: errV } = await qv;
+    if (errV) throw new Error(errV.message);
+    const ventasRaw = (vRows ?? []) as Record<string, unknown>[];
+    if (ventasRaw.length === 0) return new Map();
+
+    const loteIds = [...new Set(ventasRaw.map((v) => String(v.lote_id ?? "")).filter(Boolean))];
+    const etiquetaLote = new Map<string, string>();
+    for (let i = 0; i < loteIds.length; i += 120) {
+      const { data } = await sb.from("lotes").select("id, numero").in("id", loteIds.slice(i, i + 120));
+      for (const l of (data ?? []) as Record<string, unknown>[]) {
+        etiquetaLote.set(String(l.id), `Lote ${String(l.numero ?? "")}`);
+      }
+    }
+
+    const ventas: VentaLoteFila[] = ventasRaw.map((v) => ({
+      id: String(v.id),
+      cliente_id: String(v.cliente_id ?? ""),
+      numero_contrato: String(v.numero_contrato ?? ""),
+      estado: String(v.estado ?? ""),
+      dias_gracia: v.dias_gracia == null ? null : Number(v.dias_gracia),
+      lote_label: etiquetaLote.get(String(v.lote_id ?? "")) ?? null,
+    }));
+
+    const ventaIds = ventas.map((v) => v.id);
+    const hasta = finDeMes(hoyYmd);
+    const cuotas: CuotaLoteFila[] = [];
+    for (let i = 0; i < ventaIds.length; i += 120) {
+      for (let from = 0; ; from += PAGE) {
+        const { data, error } = await sb
+          .from("lote_venta_cuotas")
+          .select("id, venta_id, numero, vencimiento, total, saldo, estado, factura_id")
+          .eq("empresa_id", empresaId)
+          .in("venta_id", ventaIds.slice(i, i + 120))
+          .eq("estado", "pendiente")
+          .is("factura_id", null)
+          .lte("vencimiento", hasta)
+          .order("vencimiento")
+          .range(from, from + PAGE - 1);
+        if (error) throw new Error(error.message);
+        const chunk = (data ?? []) as Record<string, unknown>[];
+        for (const q of chunk) {
+          cuotas.push({
+            id: String(q.id),
+            venta_id: String(q.venta_id),
+            numero: Number(q.numero ?? 0),
+            vencimiento: ymd(q.vencimiento as string),
+            total: Number(q.total ?? 0),
+            saldo: Number(q.saldo ?? 0),
+            estado: String(q.estado ?? ""),
+            factura_id: (q.factura_id as string) ?? null,
+          });
+        }
+        if (chunk.length < PAGE) break;
+      }
+    }
+
+    return gruposCuotasLote(cuotas, ventas, hoyYmd);
+  } catch (e) {
+    console.error("[cobranzas] cuotas de lotes:", e instanceof Error ? e.message : e);
+    return new Map();
+  }
+}
+
+/** Un contrato de lote como servicio de Cobranzas, con su contrato y su mora. */
+function servicioDeLote(g: GrupoCuotasLote): { grupo: GrupoServicio; venta_id: string; mora: number } {
+  return {
+    grupo: { suscripcion_id: null, tipo: g.tipo, plan: g.plan, monto: null, facturas: g.cuotas },
+    venta_id: g.venta_id,
+    mora: g.mora,
+  };
+}
+
 /** Mapa cliente_id → fecha de la promesa de pago pendiente más reciente (por created_at). */
 async function cargarPromesasPendientes(sb: Sb, empresaId: string): Promise<Map<string, string>> {
   const fechaPorCliente = new Map<string, string>();
@@ -470,12 +588,13 @@ export async function cargarCobranzas(
   empresaId: string,
   hoyYmd: string
 ): Promise<{ resumen: CobranzasResumen; clientes: ClienteCobranza[] }> {
-  const [clientesRows, facturasRows, suscInfo, catalogoTipos, promesaPorCliente] = await Promise.all([
+  const [clientesRows, facturasRows, suscInfo, catalogoTipos, promesaPorCliente, lotesPorCliente] = await Promise.all([
     fetchAll(sb, "clientes", "id, empresa, nombre_contacto, tipo_servicio_cliente, created_at, estado, deleted_at, telefono", empresaId),
     fetchAll(sb, "facturas", "id, cliente_id, suscripcion_id, fecha, fecha_vencimiento, monto, saldo, estado", empresaId),
     cargarSuscripcionInfo(sb, empresaId),
     cargarCatalogoTipos(sb, empresaId),
     cargarPromesasPendientes(sb, empresaId),
+    cargarCuotasLotePorCliente(sb, empresaId, hoyYmd),
   ]);
 
   // Último pago por cliente (pagos → factura → cliente).
@@ -513,11 +632,19 @@ export async function cargarCobranzas(
     por_tramo: { por_vencer: 0, tramo_1: 0, tramo_2: 0, tramo_3: 0 },
   };
 
-  for (const [cid, facts] of facturasPorCliente) {
+  // Se recorren los clientes con facturas Y los que solo deben cuotas de lote:
+  // estos últimos no tienen ninguna factura con saldo y antes ni se miraban.
+  const clientesConDeuda = new Set([...facturasPorCliente.keys(), ...lotesPorCliente.keys()]);
+  for (const cid of clientesConDeuda) {
+    const facts = facturasPorCliente.get(cid) ?? [];
     const c = clienteInfo.get(cid);
     if (!esClienteActivo(c)) continue; // Cobranzas: solo clientes activos (no inactivos/eliminados)
     const grupos = agruparPorServicio(facts, suscInfo, catalogoTipos, c?.tipo_servicio_cliente as string, hoyYmd, soloCuotasSuscripcion(empresaId));
-    const servicios = grupos.map(aggServicio).filter((s) => s.total_adeudado > 0);
+    const deLotes = (lotesPorCliente.get(cid) ?? []).map((g) => {
+      const l = servicioDeLote(g);
+      return { ...aggServicio(l.grupo), venta_id: l.venta_id, mora: l.mora };
+    });
+    const servicios = [...grupos.map(aggServicio), ...deLotes].filter((s) => s.total_adeudado > 0);
     if (servicios.length === 0) continue;
     const label =
       String(c?.empresa ?? "").trim() || String(c?.nombre_contacto ?? "").trim() || cid.slice(0, 8);
@@ -584,9 +711,10 @@ export async function cargarDetalleCliente(
   if (!c) return null;
   if (!esClienteActivo(c)) return null; // Cobranzas no muestra detalle de inactivos/eliminados
 
-  const [suscInfo, catalogoTipos] = await Promise.all([
+  const [suscInfo, catalogoTipos, lotesDelCliente] = await Promise.all([
     cargarSuscripcionInfo(sb, empresaId),
     cargarCatalogoTipos(sb, empresaId),
+    cargarCuotasLotePorCliente(sb, empresaId, hoyYmd, clienteId),
   ]);
 
   const { data: fRows } = await sb
@@ -626,15 +754,19 @@ export async function cargarDetalleCliente(
 
   // Deuda por servicio (suscripción) + bucket "General".
   const grupos = agruparPorServicio(facturas, suscInfo, catalogoTipos, c.tipo_servicio_cliente as string, hoyYmd, soloCuotasSuscripcion(empresaId));
-  const servicios: ServicioDetalle[] = grupos
-    .map((g) => {
-      const agg = aggServicio(g);
-      return {
-        ...agg,
-        facturas_vencidas: g.facturas.filter((f) => f.vencida).sort(byVenc),
-        facturas_pendientes: g.facturas.filter((f) => !f.vencida).sort(byVenc),
-      };
-    })
+  const aDetalle = (g: GrupoServicio, extra: Partial<ServicioCobranza> = {}): ServicioDetalle => ({
+    ...aggServicio(g),
+    ...extra,
+    facturas_vencidas: g.facturas.filter((f) => f.vencida).sort(byVenc),
+    facturas_pendientes: g.facturas.filter((f) => !f.vencida).sort(byVenc),
+  });
+  const servicios: ServicioDetalle[] = [
+    ...grupos.map((g) => aDetalle(g)),
+    ...(lotesDelCliente.get(clienteId) ?? []).map((g) => {
+      const l = servicioDeLote(g);
+      return aDetalle(l.grupo, { venta_id: l.venta_id, mora: l.mora });
+    }),
+  ]
     .filter((s) => s.total_adeudado > 0)
     .sort((a, b) => PESO_TRAMO[b.tramo] - PESO_TRAMO[a.tramo] || b.total_adeudado - a.total_adeudado);
 
