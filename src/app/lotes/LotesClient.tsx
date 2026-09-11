@@ -54,6 +54,8 @@ export default function LotesClient() {
   const [toast, setToast] = useState<string | null>(null);
   const [seleccionado, setSeleccionado] = useState<Lote | null>(null);
   const [modalAlta, setModalAlta] = useState(false);
+  // Manzana desde la que se abrió el alta, para que el lote nazca ahí.
+  const [altaManzana, setAltaManzana] = useState("");
   const [vendiendo, setVendiendo] = useState<Lote | null>(null);
   const [vendiendoContado, setVendiendoContado] = useState<Lote | null>(null);
 
@@ -62,24 +64,31 @@ export default function LotesClient() {
     setTimeout(() => setToast(null), 4000);
   }, []);
 
-  // Estructura y clientes se cargan una vez; alimentan selectores y etiquetas.
-  // Si la estructura falla hay que decirlo: dejarla en null en silencio mostraba
-  // la pantalla vacía como si no hubiera nada cargado, escondiendo el error real.
-  useEffect(() => {
-    (async () => {
-      try {
-        const r = await fetchWithSupabaseSession("/api/lotes/estructura", { cache: "no-store" });
-        const j = (await r.json()) as { success?: boolean; error?: string; data?: EstructuraPayload };
-        if (!r.ok || j.success !== true || !j.data) throw new Error(j.error ?? `Error ${r.status}`);
-        setEstructura(j.data);
-        if (j.data.loteamientos.length > 0) setLoteamientoId(j.data.loteamientos[0].id);
-      } catch (e) {
-        setEstructura(null);
-        setErrorEstructura(e instanceof Error ? e.message : "No se pudo cargar la estructura del loteamiento");
-      }
-    })();
-    getClientes().then(setClientes).catch(() => setClientes([]));
+  // La estructura alimenta selectores, etiquetas y la grilla. Si falla hay que
+  // decirlo: dejarla en null en silencio mostraba la pantalla vacía como si no
+  // hubiera nada cargado, escondiendo el error real.
+  //
+  // Se vuelve a pedir después de dar de alta un lote, porque el alta puede haber
+  // creado una manzana nueva: con la estructura vieja, el lote recién cargado
+  // caía en una manzana que la grilla no conoce y no aparecía en ningún lado.
+  const cargarEstructura = useCallback(async (elegirPrimero: boolean) => {
+    try {
+      const r = await fetchWithSupabaseSession("/api/lotes/estructura", { cache: "no-store" });
+      const j = (await r.json()) as { success?: boolean; error?: string; data?: EstructuraPayload };
+      if (!r.ok || j.success !== true || !j.data) throw new Error(j.error ?? `Error ${r.status}`);
+      setEstructura(j.data);
+      setErrorEstructura(null);
+      if (elegirPrimero && j.data.loteamientos.length > 0) setLoteamientoId(j.data.loteamientos[0].id);
+    } catch (e) {
+      setEstructura(null);
+      setErrorEstructura(e instanceof Error ? e.message : "No se pudo cargar la estructura del loteamiento");
+    }
   }, []);
+
+  useEffect(() => {
+    void cargarEstructura(true);
+    getClientes().then(setClientes).catch(() => setClientes([]));
+  }, [cargarEstructura]);
 
   const load = useCallback(async () => {
     if (!loteamientoId) {
@@ -143,7 +152,15 @@ export default function LotesClient() {
       }));
   }, [estructura, loteamientoId]);
 
-  /** Lotes agrupados por manzana: es la vista que usa la gente en la cancha. */
+  /**
+   * Lotes agrupados por manzana: es la vista que usa la gente en la cancha.
+   *
+   * Las manzanas vacías se muestran igual. Antes se escondían, y una manzana
+   * recién creada desaparecía de la grilla con el cartel "no hay lotes que
+   * coincidan con el filtro", que se lee como si no se hubiera guardado. Con un
+   * filtro de estado sí se esconden: bajo "Reservado", una manzana sin lotes
+   * reservados no aporta nada.
+   */
   const grupos = useMemo(() => {
     const lotes = data?.lotes ?? [];
     const porManzana = new Map<string, Lote[]>();
@@ -153,9 +170,10 @@ export default function LotesClient() {
       porManzana.set(l.manzana_id, arr);
     }
     return manzanasDelLoteamiento
-      .filter((m) => porManzana.has(m.id))
+      .filter((m) => (manzanaId ? m.id === manzanaId : true))
+      .filter((m) => (filtroEstado ? porManzana.has(m.id) : true))
       .map((m) => ({ manzana: m, lotes: porManzana.get(m.id) ?? [] }));
-  }, [data, manzanasDelLoteamiento]);
+  }, [data, manzanasDelLoteamiento, manzanaId, filtroEstado]);
 
   const resumen = data?.resumen;
   const sinEstructura = estructura !== null && estructura.loteamientos.length === 0;
@@ -186,7 +204,7 @@ export default function LotesClient() {
           </Link>
           <button
             type="button"
-            onClick={() => void load()}
+            onClick={() => void Promise.all([cargarEstructura(false), load()])}
             disabled={cargando}
             className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-50"
           >
@@ -195,7 +213,10 @@ export default function LotesClient() {
           </button>
           <button
             type="button"
-            onClick={() => setModalAlta(true)}
+            onClick={() => {
+              setAltaManzana("");
+              setModalAlta(true);
+            }}
             disabled={!loteamientoId}
             title={!loteamientoId ? "Elegí primero un loteamiento" : undefined}
             className="inline-flex items-center gap-1.5 rounded-lg bg-[#0EA5E9] px-3.5 py-2 text-xs font-semibold text-white hover:bg-[#0284C7] disabled:opacity-50"
@@ -302,7 +323,9 @@ export default function LotesClient() {
             </div>
           ) : grupos.length === 0 ? (
             <div className="rounded-2xl border border-slate-200 bg-white p-10 text-center text-sm text-slate-400">
-              No hay lotes que coincidan con el filtro.
+              {manzanasDelLoteamiento.length === 0
+                ? "Este loteamiento todavía no tiene manzanas. Creá la primera con Nuevo lote → Manzana nueva."
+                : "Ningún lote de este loteamiento está en ese estado."}
             </div>
           ) : (
             <div className="space-y-4">
@@ -310,8 +333,26 @@ export default function LotesClient() {
                 <div key={manzana.id} className="rounded-2xl border border-slate-200 bg-white p-4">
                   <div className="mb-3 flex items-center justify-between gap-3">
                     <h2 className="text-sm font-semibold text-slate-800">{manzana.etiqueta}</h2>
-                    <span className="text-xs text-slate-500">{lotes.length} lote(s)</span>
+                    <span className="text-xs text-slate-500">
+                      {lotes.length} lote{lotes.length === 1 ? "" : "s"}
+                    </span>
                   </div>
+                  {lotes.length === 0 ? (
+                    <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-dashed border-slate-300 bg-slate-50/60 px-4 py-3">
+                      <span className="text-xs text-slate-500">Todavía no tiene lotes cargados.</span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setAltaManzana(manzana.id);
+                          setModalAlta(true);
+                        }}
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-[#0EA5E9]/40 bg-white px-3 py-1.5 text-xs font-semibold text-[#0284C7] hover:bg-sky-50"
+                      >
+                        <Plus className="h-3.5 w-3.5" />
+                        Cargar lote en esta manzana
+                      </button>
+                    </div>
+                  ) : null}
                   <div className="grid grid-cols-3 gap-2 sm:grid-cols-6 lg:grid-cols-10">
                     {lotes.map((l) => (
                       <button
@@ -366,12 +407,12 @@ export default function LotesClient() {
         <ModalNuevoLote
           loteamientoId={loteamientoId}
           manzanas={manzanasDelLoteamiento}
-          manzanaPorDefecto={manzanaId || manzanasDelLoteamiento[0]?.id || ""}
+          manzanaPorDefecto={altaManzana || manzanaId || manzanasDelLoteamiento[0]?.id || ""}
           onCancel={() => setModalAlta(false)}
           onSaved={async (msg) => {
             setModalAlta(false);
             showToast(msg);
-            await load();
+            await Promise.all([cargarEstructura(false), load()]);
           }}
         />
       ) : null}
