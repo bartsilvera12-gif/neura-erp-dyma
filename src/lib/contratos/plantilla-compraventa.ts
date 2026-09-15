@@ -210,7 +210,6 @@ export function plantillaCompraventaPlazos(datos: DatosContrato, opciones?: { au
     <div class="razon">${esc(config.razon_social)}</div>
     ${config.ruc ? `<div>RUC ${esc(config.ruc)}</div>` : ""}
     ${config.domicilio ? `<div>${esc(config.domicilio)}</div>` : ""}
-    ${config.ciudad_firma ? `<div>${esc(config.ciudad_firma)}${config.departamento ? `, ${esc(config.departamento)}` : ""}</div>` : ""}
   </div>
 </div>
 
