@@ -132,7 +132,7 @@ export function plantillaCompraventaPlazos(datos: DatosContrato, opciones?: { au
   <table class="cuotas">
     <thead>
       <tr>
-        <th>Cuota</th><th>Vencimiento</th><th>Capital</th><th>Recargo</th><th>Importe</th>
+        <th>Cuota</th><th>Vencimiento</th><th>Capital</th><th>Importe</th>
       </tr>
     </thead>
     <tbody>
@@ -142,7 +142,6 @@ export function plantillaCompraventaPlazos(datos: DatosContrato, opciones?: { au
         <td class="c">${c.numero}</td>
         <td class="c">${fmtFecha(c.vencimiento)}</td>
         <td>${gs(c.capital)}</td>
-        <td>${gs(c.interes)}</td>
         <td>${gs(c.total)}</td>
       </tr>`
         )
@@ -152,7 +151,6 @@ export function plantillaCompraventaPlazos(datos: DatosContrato, opciones?: { au
       <tr>
         <td class="c" colspan="2">Total</td>
         <td>${gs(cuotas.reduce((a, c) => a + c.capital, 0))}</td>
-        <td>${gs(cuotas.reduce((a, c) => a + c.interes, 0))}</td>
         <td>${gs(cuotas.reduce((a, c) => a + c.total, 0))}</td>
       </tr>
     </tfoot>

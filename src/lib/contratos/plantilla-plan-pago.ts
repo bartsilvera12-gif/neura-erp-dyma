@@ -61,7 +61,6 @@ export function plantillaPlanPago(
         <td class="c">${c.numero}</td>
         <td class="c">${esc(fmtFecha(c.vencimiento))}</td>
         <td>${gs(c.capital)}</td>
-        <td>${gs(c.interes)}</td>
         <td><strong>${gs(c.total)}</strong></td>
         <td>${gs(saldo)}</td>
         <td class="c">${pagada ? "Pagada" : parcial ? "Parcial" : "Pendiente"}</td>
@@ -139,14 +138,13 @@ export function plantillaPlanPago(
 
 <table>
   <thead>
-    <tr><th>Cuota</th><th>Vence</th><th>Capital</th><th>Recargo</th><th>Importe</th><th>Saldo</th><th>Estado</th></tr>
+    <tr><th>Cuota</th><th>Vence</th><th>Capital</th><th>Importe</th><th>Saldo</th><th>Estado</th></tr>
   </thead>
   <tbody>${filas}</tbody>
   <tfoot>
     <tr>
       <td class="c" colspan="2">Totales</td>
       <td>${gs(cuotas.reduce((a, c) => a + c.capital, 0))}</td>
-      <td>${gs(cuotas.reduce((a, c) => a + c.interes, 0))}</td>
       <td>${gs(cuotas.reduce((a, c) => a + c.total, 0))}</td>
       <td>${gs(saldoTotal)}</td>
       <td class="c">${gs(cobrado)} cobrado</td>
