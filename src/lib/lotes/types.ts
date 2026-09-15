@@ -51,6 +51,19 @@ export type CampoRegistral = (typeof CAMPOS_REGISTRALES)[number];
 
 export type DatosRegistrales = { [K in CampoRegistral]: string | null };
 
+/**
+ * Datos registrales que son propios de cada lote y no del loteamiento: en un
+ * mismo emprendimiento el padrón y la matrícula cambian de lote a lote. Al armar
+ * el contrato, el valor del lote manda sobre el del loteamiento.
+ */
+export const CAMPOS_REGISTRALES_LOTE = [
+  'padron',
+  'matricula',
+  'cuenta_corriente_catastral',
+] as const;
+
+export type CampoRegistralLote = (typeof CAMPOS_REGISTRALES_LOTE)[number];
+
 export interface Loteamiento extends DatosRegistrales {
   id: string;
   codigo: string;
@@ -87,6 +100,10 @@ export interface Lote {
   lindero_sur: string | null;
   lindero_este: string | null;
   lindero_oeste: string | null;
+  /** Datos registrales propios del lote. Ver CAMPOS_REGISTRALES_LOTE. */
+  padron: string | null;
+  matricula: string | null;
+  cuenta_corriente_catastral: string | null;
   precio_contado: number | null;
   precio_financiado: number | null;
   moneda: MonedaLote;

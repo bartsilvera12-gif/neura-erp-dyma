@@ -24,7 +24,10 @@ interface SupabaseRow {
   nombre:             string | null;
   nombre_contacto:    string | null;
   ruc:                string | null;
+  dv:                 string | null;
   documento:          string | null;
+  profesion:          string | null;
+  lugar_trabajo:      string | null;
   telefono:           string | null;
   telefono_secundario: string | null;
   email:              string | null;
@@ -88,7 +91,10 @@ function rowToCliente(row: SupabaseRow): Cliente {
     empresa:             row.empresa ?? undefined,
     nombre_contacto:     nombreContacto,
     ruc:                 row.ruc ?? undefined,
+    dv:                  row.dv ?? undefined,
     documento:           row.documento ?? undefined,
+    profesion:           row.profesion ?? undefined,
+    lugar_trabajo:       row.lugar_trabajo ?? undefined,
     telefono:            row.telefono ?? undefined,
     telefono_secundario: row.telefono_secundario ?? undefined,
     email:               row.email ?? undefined,
@@ -275,7 +281,10 @@ export async function saveCliente(datos: NuevoClienteData): Promise<Cliente | nu
     nombre:             datos.nombre_contacto ?? null,
     nombre_contacto:    datos.nombre_contacto ?? null,
     ruc:                datos.ruc ?? null,
+    dv:                 datos.dv ?? null,
     documento:          datos.documento ?? null,
+    profesion:          datos.profesion ?? null,
+    lugar_trabajo:      datos.lugar_trabajo ?? null,
     telefono:           datos.telefono ?? null,
     telefono_secundario: datos.telefono_secundario ?? null,
     email:              datos.email ?? null,
@@ -349,7 +358,10 @@ export async function saveCliente(datos: NuevoClienteData): Promise<Cliente | nu
 type CampoBorrable =
   | "empresa"
   | "ruc"
+  | "dv"
   | "documento"
+  | "profesion"
+  | "lugar_trabajo"
   | "telefono"
   | "telefono_secundario"
   | "email"
@@ -393,7 +405,10 @@ export function construirPatchActualizacionCliente(datos: ActualizarClienteInput
     patch.nombre_contacto = datos.nombre_contacto ?? null;
   }
   if (datos.ruc !== undefined) patch.ruc = textoOpcional(datos.ruc);
+  if (datos.dv !== undefined) patch.dv = textoOpcional(datos.dv);
   if (datos.documento !== undefined) patch.documento = textoOpcional(datos.documento);
+  if (datos.profesion !== undefined) patch.profesion = textoOpcional(datos.profesion);
+  if (datos.lugar_trabajo !== undefined) patch.lugar_trabajo = textoOpcional(datos.lugar_trabajo);
   if (datos.telefono !== undefined) patch.telefono = textoOpcional(datos.telefono);
   if (datos.telefono_secundario !== undefined) patch.telefono_secundario = textoOpcional(datos.telefono_secundario);
   if (datos.email !== undefined) patch.email = textoOpcional(datos.email);

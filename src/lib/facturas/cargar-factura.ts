@@ -1,6 +1,7 @@
 import "server-only";
 import type { AppSupabaseClient } from "@/lib/supabase/schema";
 import { logoIncrustado } from "@/lib/contratos/cargar-datos";
+import { documentoFiscalDesdeRow } from "@/lib/clientes/documento-fiscal";
 import {
   calcularTotalesFactura,
   condicionFactura,
@@ -142,7 +143,9 @@ export async function cargarFactura(
           String(c?.empresa ?? "").trim() ||
           String(c?.nombre_contacto ?? c?.nombre ?? "").trim() ||
           "Cliente",
-        ruc: (c?.ruc as string) ?? (c?.documento as string) ?? null,
+        // Si tiene RUC + DV se factura con RUC-DV; si no, con el documento (CI)
+        // como no contribuyente. Cargar el RUC no reemplaza la cédula.
+        ruc: documentoFiscalDesdeRow(c),
         telefono: (c?.telefono as string) ?? null,
         direccion: [(c?.direccion as string) ?? "", (c?.ciudad as string) ?? ""].filter(Boolean).join(" - ") || null,
         observacion: String(f.numero_factura ?? "") || null,

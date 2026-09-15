@@ -1,4 +1,5 @@
 import "server-only";
+import { documentoFiscalDesdeRow } from "@/lib/clientes/documento-fiscal";
 import { leerLogoInstancia } from "@/lib/documentos/logo-instancia";
 import { FRACCION_UNICA } from "@/lib/lotes/estructura-implicita";
 import type { AppSupabaseClient } from "@/lib/supabase/schema";
@@ -33,6 +34,25 @@ export function fraccionRegistral(
   const operativa = String(fraccion?.nombre ?? "").trim() || String(fraccion?.codigo ?? "").trim();
   if (!operativa) return null;
   return operativa.toLocaleUpperCase("es") === FRACCION_UNICA ? null : operativa;
+}
+
+/**
+ * Un dato registral propio del lote, con respaldo en el loteamiento.
+ *
+ * Cada lote tiene su padrón y su matrícula, distintos de los demás del mismo
+ * loteamiento. Si el lote todavía no los tiene cargados, se usa el del
+ * loteamiento —como funcionaba antes de que el dato fuera por lote—, así los
+ * loteamientos ya cargados siguen imprimiendo su contrato sin cambios.
+ */
+export function registralLote(
+  lote: Record<string, unknown> | null,
+  loteamiento: Record<string, unknown> | null,
+  campo: "padron" | "matricula" | "cuenta_corriente_catastral"
+): string | null {
+  const propio = String(lote?.[campo] ?? "").trim();
+  if (propio) return propio;
+  const general = String(loteamiento?.[campo] ?? "").trim();
+  return general || null;
 }
 
 /** Nombre visible del cliente: razón social si es empresa, si no el contacto. */
@@ -159,7 +179,9 @@ export async function cargarDatosContrato(
 
   const comprador: PersonaContrato = {
     nombre: nombreCliente(cli),
-    documento: (cli?.documento as string) || (cli?.ruc as string) || null,
+    // La cédula manda en el contrato; si el cliente solo tiene RUC, se arma
+    // RUC-DV. Cédula y RUC son datos independientes.
+    documento: String(cli?.documento ?? "").trim() || documentoFiscalDesdeRow(cli),
     nacionalidad: (cli?.nacionalidad as string) ?? null,
     estado_civil: (cli?.estado_civil as string) ?? null,
     domicilio: (cli?.direccion as string) ?? null,
@@ -189,9 +211,11 @@ export async function cargarDatosContrato(
     frente_m: lote?.frente_m == null ? null : Number(lote.frente_m),
     fondo_m: lote?.fondo_m == null ? null : Number(lote.fondo_m),
     finca_matriz: (loteamiento?.finca_matriz as string) ?? null,
-    matricula: (loteamiento?.matricula as string) ?? null,
-    cuenta_corriente_catastral: (loteamiento?.cuenta_corriente_catastral as string) ?? null,
-    padron: (loteamiento?.padron as string) ?? null,
+    // Registrales propios del lote: el dato del lote manda; si no lo cargaron,
+    // se cae al del loteamiento (retrocompatible con los ya cargados así).
+    matricula: registralLote(lote, loteamiento, "matricula"),
+    cuenta_corriente_catastral: registralLote(lote, loteamiento, "cuenta_corriente_catastral"),
+    padron: registralLote(lote, loteamiento, "padron"),
     departamento: (loteamiento?.departamento as string) ?? config.departamento,
     distrito: (loteamiento?.distrito as string) ?? null,
     resolucion_municipal: (loteamiento?.resolucion_municipal as string) ?? null,

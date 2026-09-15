@@ -41,6 +41,9 @@ export interface ClienteFicha {
   tipo: string;
   documento: string | null;
   ruc: string | null;
+  dv: string | null;
+  profesion: string | null;
+  lugar_trabajo: string | null;
   nacionalidad: string | null;
   estado_civil: string | null;
   telefono: string | null;
@@ -211,8 +214,12 @@ export function plantillaFichaCliente(
 <h2>Datos del cliente</h2>
 <div class="datos">
   ${fila("Tipo", esc(cliente.tipo))}
-  ${fila(cliente.ruc ? "RUC" : "C.I. / Documento", d(cliente.ruc || cliente.documento, 14))}
+  ${cliente.documento ? fila("C.I. / Documento", d(cliente.documento, 14)) : ""}
+  ${cliente.ruc ? fila("RUC", d(cliente.dv ? `${cliente.ruc}-${cliente.dv}` : cliente.ruc, 14)) : ""}
+  ${!cliente.documento && !cliente.ruc ? fila("C.I. / Documento", "—") : ""}
   ${fila("Estado", esc(cliente.estado))}
+  ${fila("Profesión / Ocupación", d(cliente.profesion, 20))}
+  ${fila("Lugar de trabajo", d(cliente.lugar_trabajo, 24))}
   ${fila("Nacionalidad", d(cliente.nacionalidad, 12))}
   ${fila("Estado civil", d(cliente.estado_civil, 12))}
   ${fila("Cliente desde", cliente.alta ? esc(fmtFecha(cliente.alta)) : "—")}

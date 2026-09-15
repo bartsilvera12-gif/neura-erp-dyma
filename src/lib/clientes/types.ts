@@ -30,7 +30,14 @@ export interface Cliente {
   nombre_contacto:     string;          // persona de contacto principal
 
   ruc?:                string;
+  /** Dígito verificador del RUC, independiente del cuerpo (`ruc`). */
+  dv?:                 string;
   documento?:          string;          // CI / pasaporte (persona)
+
+  /** Profesión / Ocupación: a qué se dedica la persona. */
+  profesion?:          string;
+  /** Lugar de trabajo. */
+  lugar_trabajo?:      string;
 
   telefono?:           string;
   telefono_secundario?: string;

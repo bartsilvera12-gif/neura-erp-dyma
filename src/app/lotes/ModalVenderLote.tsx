@@ -237,7 +237,7 @@ export default function ModalVenderLote({
           <div>
             <h3 className="text-base font-semibold text-slate-900">Vender lote {lote.numero}</h3>
             <p className="mt-0.5 text-[11px] text-slate-500">
-              Recargo del {(recargo * 100).toFixed(2).replace(/\.?0+$/, "")}% sobre el capital, en cuotas iguales.
+              Recargo del {(recargo * 100).toFixed(2).replace(/\.?0+$/, "")}% anual sobre el capital, prorrateado según el plazo y repartido en cuotas iguales.
             </p>
           </div>
           <button type="button" onClick={onCancel} className="rounded-lg p-1 text-slate-400 hover:bg-slate-100">
@@ -404,7 +404,7 @@ export default function ModalVenderLote({
           <>
             <div className="mt-4 grid gap-2 rounded-xl border border-slate-200 bg-slate-50/60 p-3 sm:grid-cols-4">
               <Dato titulo="Capital" valor={fmt(p.capital, moneda)} />
-              <Dato titulo={`Recargo ${(RECARGO_FINANCIACION * 100).toFixed(0)}%`} valor={fmt(p.interes_total, moneda)} />
+              <Dato titulo="Recargo total" valor={fmt(p.interes_total, moneda)} />
               <Dato titulo="A financiar" valor={fmt(p.monto_financiado, moneda)} />
               <Dato titulo="Cuota" valor={fmt(p.cuotas[0]?.total ?? 0, moneda)} destacado />
             </div>

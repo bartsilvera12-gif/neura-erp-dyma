@@ -524,6 +524,9 @@ function PanelLote({
     lindero_sur: lote.lindero_sur ?? "",
     lindero_este: lote.lindero_este ?? "",
     lindero_oeste: lote.lindero_oeste ?? "",
+    padron: lote.padron ?? "",
+    matricula: lote.matricula ?? "",
+    cuenta_corriente_catastral: lote.cuenta_corriente_catastral ?? "",
     precio_contado: lote.precio_contado?.toString() ?? "",
     precio_financiado: lote.precio_financiado?.toString() ?? "",
     moneda: lote.moneda as MonedaLote,
@@ -714,6 +717,38 @@ function PanelLote({
           </section>
 
           <section>
+            <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+              Datos registrales del lote
+            </p>
+            <p className="mb-2 text-[10px] text-slate-400">
+              Propios de este lote (padrón, matrícula). Mandan sobre los del loteamiento al armar el contrato; si
+              quedan vacíos, se usan los del loteamiento.
+            </p>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className={labelClass}>Padrón</label>
+                <input value={form.padron} onChange={(e) => set("padron", e.target.value)} className={inputClass} />
+              </div>
+              <div>
+                <label className={labelClass}>N.º Finca / Matrícula / CUICR</label>
+                <input
+                  value={form.matricula}
+                  onChange={(e) => set("matricula", e.target.value)}
+                  className={inputClass}
+                />
+              </div>
+              <div className="col-span-2">
+                <label className={labelClass}>Cta. Cte. Catastral</label>
+                <input
+                  value={form.cuenta_corriente_catastral}
+                  onChange={(e) => set("cuenta_corriente_catastral", e.target.value)}
+                  className={inputClass}
+                />
+              </div>
+            </div>
+          </section>
+
+          <section>
             <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-slate-500">Precios de lista</p>
             <div className="grid grid-cols-2 gap-3">
               <div>
@@ -829,6 +864,11 @@ function ModalNuevoLote({
   // Los linderos van en el contrato, así que conviene cargarlos junto con el
   // lote y no dejarlos para una segunda pasada por la pantalla de edición.
   const [linderos, setLinderos] = useState({ norte: "", sur: "", este: "", oeste: "" });
+  // Padrón y matrícula son propios de cada lote; se cargan acá para no depender
+  // de los del loteamiento al armar el contrato.
+  const [padron, setPadron] = useState("");
+  const [matricula, setMatricula] = useState("");
+  const [ctaCatastral, setCtaCatastral] = useState("");
   const [guardando, setGuardando] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
@@ -854,6 +894,9 @@ function ModalNuevoLote({
           lindero_sur: linderos.sur,
           lindero_este: linderos.este,
           lindero_oeste: linderos.oeste,
+          padron,
+          matricula,
+          cuenta_corriente_catastral: ctaCatastral,
         }),
       });
       const json = (await res.json()) as { success?: boolean; error?: string };
@@ -973,6 +1016,30 @@ function ModalNuevoLote({
                   />
                 </div>
               ))}
+            </div>
+          </div>
+
+          <div>
+            <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-slate-500">
+              Datos registrales del lote
+            </p>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className={labelClass}>Padrón</label>
+                <input value={padron} onChange={(e) => setPadron(e.target.value)} className={inputClass} />
+              </div>
+              <div>
+                <label className={labelClass}>N.º Finca / Matrícula / CUICR</label>
+                <input value={matricula} onChange={(e) => setMatricula(e.target.value)} className={inputClass} />
+              </div>
+              <div className="col-span-2">
+                <label className={labelClass}>Cta. Cte. Catastral</label>
+                <input
+                  value={ctaCatastral}
+                  onChange={(e) => setCtaCatastral(e.target.value)}
+                  className={inputClass}
+                />
+              </div>
             </div>
           </div>
         </div>

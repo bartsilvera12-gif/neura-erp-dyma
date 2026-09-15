@@ -170,7 +170,10 @@ export default function ClienteDetailPage() {
     empresa:             "",
     nombre_contacto:     "",
     ruc:                 "",
+    dv:                  "",
     documento:           "",
+    profesion:           "",
+    lugar_trabajo:       "",
     telefono:            "",
     telefono_secundario: "",
     email:               "",
@@ -289,7 +292,10 @@ export default function ClienteDetailPage() {
         empresa:             c.empresa             ?? "",
         nombre_contacto:     c.nombre_contacto,
         ruc:                 c.ruc                 ?? "",
+        dv:                  c.dv                  ?? "",
         documento:           c.documento           ?? "",
+        profesion:           c.profesion           ?? "",
+        lugar_trabajo:       c.lugar_trabajo       ?? "",
         telefono:            c.telefono            ?? "",
         telefono_secundario: c.telefono_secundario ?? "",
         email:               c.email               ?? "",
@@ -448,7 +454,7 @@ export default function ClienteDetailPage() {
     }
   }, [form.condicion_pago, id]);
 
-  const upper = ["empresa", "nombre_contacto", "ciudad", "pais", "vendedor_asignado", "condicion_pago", "direccion", "sifen_codigo_pais"];
+  const upper = ["empresa", "nombre_contacto", "ciudad", "pais", "vendedor_asignado", "condicion_pago", "direccion", "sifen_codigo_pais", "profesion", "lugar_trabajo"];
   const lower = ["email", "email_secundario"];
 
   function handleChange(e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) {
@@ -567,7 +573,10 @@ export default function ClienteDetailPage() {
         empresa:             form.tipo_cliente === "empresa" ? form.empresa.trim().toUpperCase() : null,
         nombre_contacto:     form.nombre_contacto.trim().toUpperCase(),
         ruc:                 form.ruc.trim()                 || null,
+        dv:                  form.dv.trim()                  || null,
         documento:           form.documento.trim()           || null,
+        profesion:           form.profesion.trim()           || null,
+        lugar_trabajo:       form.lugar_trabajo.trim()       || null,
         telefono:            form.telefono.trim()            || null,
         telefono_secundario: form.telefono_secundario.trim() || null,
         email:               form.email.trim()               || null,
@@ -1382,13 +1391,18 @@ export default function ClienteDetailPage() {
                     <label className={labelClass}>{form.tipo_cliente === "empresa" ? "Persona de contacto" : "Nombre completo"}</label>
                     <input type="text" name="nombre_contacto" value={form.nombre_contacto} onChange={handleChange} className={`${inputClass} uppercase`} required />
                   </div>
-                  <div>
-                    <label className={labelClass}>{form.tipo_cliente === "empresa" ? "RUC" : "CI / Documento"}</label>
-                    {form.tipo_cliente === "empresa" ? (
-                      <input type="text" name="ruc" value={form.ruc} onChange={handleChange} className={inputClass} />
-                    ) : (
+                  {form.tipo_cliente === "persona" && (
+                    <div>
+                      <label className={labelClass}>CI / Documento</label>
                       <input type="text" name="documento" value={form.documento} onChange={handleChange} className={inputClass} />
-                    )}
+                    </div>
+                  )}
+                  <div>
+                    <label className={labelClass}>RUC / DV</label>
+                    <div className="flex gap-2">
+                      <input type="text" name="ruc" value={form.ruc} onChange={handleChange} placeholder="80012345" className={`${inputClass} flex-1`} />
+                      <input type="text" name="dv" value={form.dv} onChange={handleChange} placeholder="DV" maxLength={1} className={`${inputClass} w-16 text-center`} />
+                    </div>
                   </div>
                 </div>
 
@@ -1414,6 +1428,31 @@ export default function ClienteDetailPage() {
                       onChange={handleChange}
                       placeholder="soltero/a, casado/a…"
                       className={inputClass}
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <div>
+                    <label className={labelClass}>Profesión / Ocupación</label>
+                    <input
+                      type="text"
+                      name="profesion"
+                      value={form.profesion}
+                      onChange={handleChange}
+                      placeholder="A qué se dedica"
+                      className={`${inputClass} uppercase`}
+                    />
+                  </div>
+                  <div>
+                    <label className={labelClass}>Lugar de trabajo</label>
+                    <input
+                      type="text"
+                      name="lugar_trabajo"
+                      value={form.lugar_trabajo}
+                      onChange={handleChange}
+                      placeholder="Empresa o institución donde trabaja"
+                      className={`${inputClass} uppercase`}
                     />
                   </div>
                 </div>

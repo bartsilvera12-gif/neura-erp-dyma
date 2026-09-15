@@ -6,6 +6,7 @@ import { ArrowLeft, ChevronRight, Pencil, Plus, RefreshCw, Trash2, X } from "luc
 import { fetchWithSupabaseSession } from "@/lib/api/fetch-with-supabase-session";
 import {
   CAMPOS_REGISTRALES,
+  CAMPOS_REGISTRALES_LOTE,
   type CampoRegistral,
   type EstructuraPayload,
   type Loteamiento,
@@ -120,7 +121,11 @@ export default function EstructuraClient() {
         fracciones,
         manzanas: fracciones.flatMap((f) => f.manzanas),
         variasFracciones: fracciones.length > 1,
-        registralesFaltantes: CAMPOS_REGISTRALES.filter((c) => !String(lo[c] ?? "").trim()).length,
+        // Padrón/matrícula/cta. catastral se cargan por lote: no cuentan como
+        // dato faltante del loteamiento, solo los generales del emprendimiento.
+        registralesFaltantes: CAMPOS_REGISTRALES.filter(
+          (c) => !CAMPOS_REGISTRALES_LOTE.includes(c as (typeof CAMPOS_REGISTRALES_LOTE)[number])
+        ).filter((c) => !String(lo[c] ?? "").trim()).length,
       };
     });
   }, [data]);
@@ -579,21 +584,28 @@ function ModalFichaLoteamiento({
           Datos registrales para el contrato
         </p>
         <div className="mt-2 grid gap-3 sm:grid-cols-2">
-          {CAMPOS_REGISTRALES.map((campo) => (
-            <div key={campo}>
-              <label className={labelClass}>{ETIQUETA_REGISTRAL[campo]}</label>
-              <input
-                value={registrales[campo] ?? ""}
-                onChange={(e) => set(campo, e.target.value)}
-                className={inputClass}
-              />
-            </div>
-          ))}
+          {CAMPOS_REGISTRALES.map((campo) => {
+            const porLote = (CAMPOS_REGISTRALES_LOTE as readonly string[]).includes(campo);
+            return (
+              <div key={campo}>
+                <label className={labelClass}>
+                  {ETIQUETA_REGISTRAL[campo]}
+                  {porLote ? <span className="ml-1 font-normal text-slate-400">(por defecto; se puede cargar por lote)</span> : null}
+                </label>
+                <input
+                  value={registrales[campo] ?? ""}
+                  onChange={(e) => set(campo, e.target.value)}
+                  className={inputClass}
+                />
+              </div>
+            );
+          })}
         </div>
 
         <p className="mt-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-[11px] text-slate-500">
-          Lo propio de cada lote —manzana, número, superficie, frente, fondo y linderos— se carga en el lote.
-          El contrato junta las dos cosas al imprimirse.
+          Lo propio de cada lote —manzana, número, superficie, frente, fondo, linderos y sus datos registrales
+          (padrón, matrícula, cta. catastral)— se carga en el lote. Lo que se cargue acá se usa como valor por
+          defecto cuando el lote no lo tiene. El contrato junta las dos cosas al imprimirse.
         </p>
 
         {err ? <p className="mt-3 text-xs text-rose-600">{err}</p> : null}

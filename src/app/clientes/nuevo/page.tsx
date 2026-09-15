@@ -58,7 +58,10 @@ function NuevoClienteForm() {
     empresa:             "",
     nombre_contacto:     "",
     ruc:                 "",
+    dv:                  "",
     documento:           "",
+    profesion:           "",
+    lugar_trabajo:       "",
     telefono:            "",
     telefono_secundario: "",
     email:               "",
@@ -186,7 +189,7 @@ function NuevoClienteForm() {
     return () => { cancelled = true; };
   }, [fromCrmId]);
 
-  const upper = ["empresa", "nombre_contacto", "ciudad", "pais", "vendedor_asignado", "condicion_pago", "direccion", "sifen_codigo_pais"];
+  const upper = ["empresa", "nombre_contacto", "ciudad", "pais", "vendedor_asignado", "condicion_pago", "direccion", "sifen_codigo_pais", "profesion", "lugar_trabajo"];
   const lower = ["email", "email_secundario"];
 
   function handleChange(
@@ -301,7 +304,10 @@ function NuevoClienteForm() {
       empresa: form.tipo_cliente === "empresa" ? form.empresa.trim().toUpperCase() : undefined,
       nombre_contacto: form.nombre_contacto.trim().toUpperCase(),
       ruc: form.ruc.trim() || undefined,
+      dv: form.dv.trim() || undefined,
       documento: form.documento.trim() || undefined,
+      profesion: form.profesion.trim().toUpperCase() || undefined,
+      lugar_trabajo: form.lugar_trabajo.trim().toUpperCase() || undefined,
       telefono: form.telefono.trim() || undefined,
       telefono_secundario: form.telefono_secundario.trim() || undefined,
       email: form.email.trim() || undefined,
@@ -469,20 +475,9 @@ function NuevoClienteForm() {
                   required
                 />
               </div>
-              <div>
-                <label className={labelClass}>
-                  {form.tipo_cliente === "empresa" ? "RUC" : "CI / Documento"}
-                </label>
-                {form.tipo_cliente === "empresa" ? (
-                  <input
-                    type="text"
-                    name="ruc"
-                    value={form.ruc}
-                    onChange={handleChange}
-                    placeholder="00000000-0"
-                    className={inputClass}
-                  />
-                ) : (
+              {form.tipo_cliente === "persona" && (
+                <div>
+                  <label className={labelClass}>CI / Documento</label>
                   <input
                     type="text"
                     name="documento"
@@ -491,7 +486,56 @@ function NuevoClienteForm() {
                     placeholder="CI sin puntos"
                     className={inputClass}
                   />
+                </div>
+              )}
+              <div>
+                <label className={labelClass}>RUC / DV</label>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    name="ruc"
+                    value={form.ruc}
+                    onChange={handleChange}
+                    placeholder="80012345"
+                    className={`${inputClass} flex-1`}
+                  />
+                  <input
+                    type="text"
+                    name="dv"
+                    value={form.dv}
+                    onChange={handleChange}
+                    placeholder="DV"
+                    maxLength={1}
+                    className={`${inputClass} w-16 text-center`}
+                  />
+                </div>
+                {form.tipo_cliente === "persona" && (
+                  <p className="mt-1 text-[11px] text-slate-400">
+                    Opcional. Si la persona está inscripta con RUC, se carga además de la cédula y se usa para facturar.
+                  </p>
                 )}
+              </div>
+              <div>
+                <label className={labelClass}>Profesión / Ocupación</label>
+                <input
+                  type="text"
+                  name="profesion"
+                  value={form.profesion}
+                  onChange={handleChange}
+                  placeholder="A qué se dedica"
+                  className={`${inputClass} uppercase`}
+                />
+              </div>
+              <div>
+                <label className={labelClass}>Lugar de trabajo</label>
+                <input
+                  type="text"
+                  name="lugar_trabajo"
+                  value={form.lugar_trabajo}
+                  onChange={handleChange}
+                  placeholder="Empresa o institución donde trabaja"
+                  className={`${inputClass} uppercase`}
+                />
               </div>
             </div>
           </section>

@@ -396,7 +396,7 @@ export default function SimuladorClient() {
               />
             </div>
             <div>
-              <label className={labelClass}>Recargo (%)</label>
+              <label className={labelClass}>Recargo anual (%)</label>
               <input
                 type="number"
                 min={0}
@@ -408,7 +408,7 @@ export default function SimuladorClient() {
                 className={inputClass}
               />
               <p className="mt-1 text-[10px] text-slate-400">
-                El estándar es {RECARGO_FINANCIACION * 100}%. Ponelo en 0 para una condición especial.
+                El estándar es {RECARGO_FINANCIACION * 100}% anual (se prorratea por el plazo). Ponelo en 0 para una condición especial.
               </p>
             </div>
           </div>
@@ -463,7 +463,7 @@ export default function SimuladorClient() {
                   <Fila k="Entrega" v={gs(p.entrega_inicial)} />
                   <Fila k="Saldo a financiar" v={gs(p.capital)} />
                   {p.interes_total > 0 ? (
-                    <Fila k={`Recargo ${(p.recargo_pct * 100).toFixed(2).replace(/\.?0+$/, "")}%`} v={gs(p.interes_total)} />
+                    <Fila k={`Recargo total (${(p.recargo_pct * 100).toFixed(2).replace(/\.?0+$/, "")}% anual)`} v={gs(p.interes_total)} />
                   ) : null}
                   <Fila k="Saldo financiado" v={gs(p.monto_financiado)} destacado />
                 </dl>

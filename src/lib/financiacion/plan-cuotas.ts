@@ -2,7 +2,9 @@
  * Motor de cálculo del financiamiento de lotes.
  *
  * Reglas definidas por el cliente:
- *   - Recargo del 15% sobre el capital financiado, repartido en cuotas iguales.
+ *   - Recargo del 15% ANUAL sobre el capital financiado, prorrateado según la
+ *     duración total del plan: recargo = capital × 15% × años financiados.
+ *     Se reparte en cuotas iguales.
  *   - Mora: 5% diario acumulativo sobre la cuota vencida, desglosado en
  *     1,7% de gastos administrativos y 3,3% de gastos moratorios.
  *   - 5 días de gracia: la mora recién corre a partir del sexto día de atraso.
@@ -11,7 +13,13 @@
  * sola, sin base ni red.
  */
 
-/** Recargo por financiar, sobre el capital. */
+/**
+ * Recargo ANUAL por financiar, sobre el capital.
+ *
+ * Es una tasa por año, no un total: el recargo efectivo del plan se prorratea
+ * por la cantidad de años que dura (`capital × tasa × años`). Un plan a 5 años
+ * paga cinco veces esta tasa; uno a 6 meses, la mitad.
+ */
 export const RECARGO_FINANCIACION = 0.15;
 
 /**
@@ -38,7 +46,7 @@ export interface Cuota {
   vencimiento: string;
   /** Parte de la cuota que amortiza capital. */
   capital: number;
-  /** Parte de la cuota que corresponde al recargo del 15%. */
+  /** Parte de la cuota que corresponde al recargo anual prorrateado. */
   interes: number;
   /** Lo que el cliente paga ese mes. */
   total: number;
@@ -49,7 +57,7 @@ export interface PlanCuotas {
   entrega_inicial: number;
   /** Lo que queda a financiar antes del recargo. */
   capital: number;
-  /** Recargo del 15% sobre el capital. */
+  /** Recargo anual prorrateado por el plazo: capital × tasa × años. */
   interes_total: number;
   /** Capital + recargo: lo que se reparte en cuotas. */
   monto_financiado: number;
@@ -116,6 +124,27 @@ export function vencimientoCuota(primero: string, indice: number, frecuencia: Fr
   return f.meses > 0 ? sumarMeses(primero, indice * f.meses) : sumarDias(primero, indice * f.dias);
 }
 
+/**
+ * Cuántos meses de calendario abarca una cuota, según su frecuencia. La
+ * quincenal (15 días corridos) cuenta como medio mes.
+ */
+export function mesesPorCuota(frecuencia: Frecuencia): number {
+  const f = FRECUENCIAS[frecuencia];
+  return f.meses > 0 ? f.meses : f.dias / 30;
+}
+
+/**
+ * Años que dura el plan completo, para prorratear el recargo anual.
+ *
+ * Sale de la duración real —cantidad de cuotas por el largo de cada una—, no de
+ * asumir cuotas mensuales: 60 cuotas mensuales son 5 años, pero 60 bimestrales
+ * son 10. Es fraccionario a propósito: un plan a 18 meses paga 1,5 años de
+ * recargo, no 2.
+ */
+export function aniosDelPlan(cantidadCuotas: number, frecuencia: Frecuencia): number {
+  return (cantidadCuotas * mesesPorCuota(frecuencia)) / 12;
+}
+
 /** Días corridos entre dos fechas YYYY-MM-DD. Positivo si `hasta` es posterior. */
 export function diasEntre(desde: string, hasta: string): number {
   return Math.round((Date.parse(`${hasta}T00:00:00Z`) - Date.parse(`${desde}T00:00:00Z`)) / 86_400_000);
@@ -124,9 +153,14 @@ export function diasEntre(desde: string, hasta: string): number {
 /**
  * Arma el plan de cuotas.
  *
- * El recargo del 15% se aplica sobre el CAPITAL (precio de contado menos la
+ * El recargo anual se aplica sobre el CAPITAL (precio de contado menos la
  * entrega inicial), no sobre el precio de lista: lo que se paga al contado el
  * primer día no se está financiando, así que no corresponde recargarlo.
+ *
+ * Y se prorratea por los años que dura el plan: `capital × tasa × años`. La
+ * tasa es anual, así que un plan más largo acumula más recargo. Como el recargo
+ * total se reparte parejo, el interés de cada cuota queda fijo e igual a
+ * `capital × tasa × (meses de la cuota / 12)`, independiente de cuántas sean.
  *
  * Los guaraníes no tienen centavos, así que todo se redondea a entero y la
  * última cuota absorbe la diferencia. De esa forma la suma de las cuotas es
@@ -147,6 +181,7 @@ export function generarPlanCuotas(input: {
   const entrega = Math.round(input.entregaInicial ?? 0);
   const n = Math.trunc(input.cantidadCuotas);
   const recargo = input.recargo ?? RECARGO_FINANCIACION;
+  const frecuencia = input.frecuencia ?? "mensual";
 
   if (!Number.isFinite(precioContado) || precioContado <= 0) {
     throw new Error("El precio de contado debe ser mayor a 0");
@@ -161,7 +196,8 @@ export function generarPlanCuotas(input: {
   }
 
   const capital = precioContado - entrega;
-  const interesTotal = Math.round(capital * recargo);
+  // Recargo anual prorrateado por la duración del plan: capital × tasa × años.
+  const interesTotal = Math.round(capital * recargo * aniosDelPlan(n, frecuencia));
   const montoFinanciado = capital + interesTotal;
 
   // Cuota pareja para las n-1 primeras; la última cierra el total exacto.
@@ -177,7 +213,7 @@ export function generarPlanCuotas(input: {
     const int = esUltima ? interesTotal - interesBase * (n - 1) : interesBase;
     cuotas.push({
       numero: i,
-      vencimiento: vencimientoCuota(input.primerVencimiento, i - 1, input.frecuencia ?? "mensual"),
+      vencimiento: vencimientoCuota(input.primerVencimiento, i - 1, frecuencia),
       capital: cap,
       interes: int,
       total,
@@ -193,25 +229,6 @@ export function generarPlanCuotas(input: {
     total_operacion: entrega + montoFinanciado,
     cuotas,
   };
-}
-
-/**
- * Cuántas cuotas hacen falta para cubrir `montoFinanciado` pagando `cuota` por vez.
- *
- * Se redondea hacia arriba: si sobra un resto, hace falta una cuota más. Esa
- * última sale más chica que las demás, no más grande, así el cliente nunca paga
- * de más al final.
- */
-export function cuotasNecesarias(montoFinanciado: number, cuota: number): number {
-  if (!Number.isFinite(montoFinanciado) || montoFinanciado <= 0) {
-    throw new Error("No hay saldo para financiar");
-  }
-  if (!Number.isFinite(cuota) || cuota <= 0) {
-    throw new Error("La cuota propuesta debe ser mayor a 0");
-  }
-  const n = Math.ceil(montoFinanciado / cuota);
-  if (!Number.isFinite(n)) throw new Error("La cuota propuesta no permite calcular un plan");
-  return Math.max(1, n);
 }
 
 /** Cómo se resolvió la simulación: qué dato puso el usuario y cuál dedujo el sistema. */
@@ -269,7 +286,6 @@ export function simularPlan(input: {
   }
 
   const capital = precioContado - entrega;
-  const montoFinanciado = capital + Math.round(capital * recargo);
 
   let modo: ModoSimulacion;
   let n: number;
@@ -278,9 +294,24 @@ export function simularPlan(input: {
   if (input.cuotaPropuesta != null && input.cuotaPropuesta > 0) {
     modo = "por_cuota";
     propuesta = Math.round(input.cuotaPropuesta);
-    n = cuotasNecesarias(montoFinanciado, propuesta);
+    // Con el recargo anual prorrateado, el interés de cada cuota es fijo
+    // (capital × tasa × meses/12) y no depende de cuántas cuotas haya. Así la
+    // parte de la cuota que amortiza capital es `propuesta − interésPorCuota`, y
+    // la cantidad sale de dividir el capital por eso. Esto rompe la dependencia
+    // circular de "el monto financiado depende de n y n del monto financiado".
+    const interesPorCuota = capital * recargo * mesesPorCuota(frecuencia) / 12;
+    const amortizaPorCuota = propuesta - interesPorCuota;
+    if (amortizaPorCuota <= 0) {
+      const minimaCubreInteres = Math.ceil(interesPorCuota + capital / MAX_CUOTAS);
+      throw new Error(
+        `La cuota de ${propuesta.toLocaleString("es-PY")} no alcanza a cubrir el recargo del período ` +
+          `(${Math.ceil(interesPorCuota).toLocaleString("es-PY")}): el saldo nunca bajaría. ` +
+          `La cuota mínima es ${minimaCubreInteres.toLocaleString("es-PY")}.`
+      );
+    }
+    n = Math.max(1, Math.ceil(capital / amortizaPorCuota));
     if (n > MAX_CUOTAS) {
-      const minima = Math.ceil(montoFinanciado / MAX_CUOTAS);
+      const minima = Math.ceil(interesPorCuota + capital / MAX_CUOTAS);
       throw new Error(
         `Con una cuota de ${propuesta.toLocaleString("es-PY")} harían falta ${n.toLocaleString("es-PY")} cuotas. ` +
           `La cuota mínima para entrar en ${MAX_CUOTAS} es ${minima.toLocaleString("es-PY")}.`

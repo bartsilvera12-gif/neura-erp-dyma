@@ -177,7 +177,7 @@ function hoja(
     <table class="receptor">
       <tr>
         <td class="k">Fecha de Emisión:</td><td class="v">${esc(fmtFecha(datos.fecha))}</td>
-        <td class="k">RUC:</td><td class="v">${esc(cliente.ruc ?? "")}</td>
+        <td class="k">RUC / C.I.:</td><td class="v">${esc(cliente.ruc ?? "")}</td>
       </tr>
       <tr>
         <td class="k">Señor(es):</td><td class="v">${esc(cliente.nombre)}</td>

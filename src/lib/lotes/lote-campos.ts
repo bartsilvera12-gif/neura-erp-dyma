@@ -19,6 +19,9 @@ export function camposLoteDesdeBody(body: Record<string, unknown>): Record<strin
   if ("lindero_sur" in body) out.lindero_sur = txt(body.lindero_sur);
   if ("lindero_este" in body) out.lindero_este = txt(body.lindero_este);
   if ("lindero_oeste" in body) out.lindero_oeste = txt(body.lindero_oeste);
+  if ("padron" in body) out.padron = txt(body.padron);
+  if ("matricula" in body) out.matricula = txt(body.matricula);
+  if ("cuenta_corriente_catastral" in body) out.cuenta_corriente_catastral = txt(body.cuenta_corriente_catastral);
   if ("precio_contado" in body) out.precio_contado = num(body.precio_contado);
   if ("precio_financiado" in body) out.precio_financiado = num(body.precio_financiado);
   if ("moneda" in body) out.moneda = body.moneda === "USD" ? "USD" : "GS";

@@ -66,9 +66,11 @@ o loteamiento si no cuelga de ellos ningún lote reservado, vendido o bloqueado.
 Reglas definidas por el cliente, congeladas en cada contrato para que un cambio
 de política no altere lo ya firmado:
 
-- Recargo del **15%** sobre el capital (contado − entrega inicial), repartido en
-  cuotas iguales. No se aplica sobre el precio de lista: lo que se paga al contado
-  el primer día no se está financiando.
+- Recargo del **15% anual** sobre el capital (contado − entrega inicial),
+  **prorrateado por los años que dura el plan** (`capital × 0,15 × años`) y
+  repartido en cuotas iguales. Un plan a 5 años (60 cuotas mensuales) paga cinco
+  veces la tasa; uno a 6 meses, la mitad. No se aplica sobre el precio de lista:
+  lo que se paga al contado el primer día no se está financiando.
 - Mora del **5% diario acumulativo** sobre el saldo impago de la cuota, desglosada
   en 1,7% de gastos administrativos y 3,3% moratorios.
 - **5 días de gracia**: la mora corre desde el sexto día de atraso.
