@@ -478,6 +478,12 @@ export default function SimuladorClient() {
                   cuotas {FRECUENCIAS[p.frecuencia].label.toLowerCase()}es de{" "}
                   <span className="tabular-nums">{gs(p.cuota)}</span>
                 </p>
+                {p.interes_total > 0 ? (
+                  <p className="mt-0.5 text-[11px] text-slate-500">
+                    Cuota exacta (sistema francés):{" "}
+                    {p.cuota_exacta.toLocaleString("es-PY", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} Gs.
+                  </p>
+                ) : null}
                 {p.cuota_final !== p.cuota ? (
                   <p className="mt-1 text-[11px] text-slate-500">
                     La última es de {gs(p.cuota_final)} y cierra el saldo exacto.

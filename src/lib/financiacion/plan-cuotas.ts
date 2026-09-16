@@ -52,7 +52,7 @@ export interface Cuota {
   interes: number;
   /** Capital amortizado en esta cuota = total − interes. Sube cuota a cuota. */
   capital: number;
-  /** Lo que el cliente paga ese mes (cuota fija; la última puede diferir por redondeo). */
+  /** Lo que el cliente paga ese mes: la cuota fija (puede variar ±1 Gs por redondeo al guaraní; la última cierra el saldo). */
   total: number;
   /** Saldo de capital después de pagar esta cuota. En la última queda en 0. */
   saldo_final: number;
@@ -63,6 +63,8 @@ export interface PlanCuotas {
   entrega_inicial: number;
   /** Capital financiado (precio de contado − entrega inicial). */
   capital: number;
+  /** Cuota exacta del sistema francés, sin redondear (como la muestra el BCP). */
+  cuota_exacta: number;
   /** Suma de los intereses de todas las cuotas del sistema francés. */
   interes_total: number;
   /** Capital + interés total = total a pagar del saldo financiado (suma de las cuotas). */
@@ -176,9 +178,13 @@ export function diasEntre(desde: string, hasta: string): number {
  * se cobra sobre el saldo pendiente —así baja— y el resto amortiza capital
  * —así sube—.
  *
- * Los guaraníes no tienen centavos: la cuota y cada interés se redondean a
- * entero, y la última cuota se ajusta para que el saldo cierre exactamente en
- * cero. Por eso la suma de las cuotas es siempre exactamente el monto financiado.
+ * La corrida se hace en DECIMALES de punta a punta (la cuota exacta y el saldo
+ * flotante), y sólo se redondea al guaraní para mostrar y guardar. Así los
+ * totales coinciden con la calculadora del BCP en vez de arrastrar el desvío de
+ * redondear cada mes. El interés total se redondea una sola vez; el saldo
+ * mostrado se encadena de forma telescópica —capital de la cuota = saldo inicial
+ * − saldo final— para que la suma de capital dé exactamente el capital inicial y
+ * el saldo termine en cero, y el interés de la última cuota cierra el total.
  */
 export function generarPlanCuotas(input: {
   precioContado: number;
@@ -212,38 +218,47 @@ export function generarPlanCuotas(input: {
   const capital = precioContado - entrega;
   const i = tasaPeriodica(recargo, frecuencia);
 
-  // Cuota fija del sistema francés, redondeada al guaraní. Las primeras n-1 salen
-  // por esta cuota; la última amortiza el saldo que quede para cerrar en cero.
-  const cuotaFija = Math.round(cuotaFrancesa(capital, i, n));
+  // Cuota exacta del sistema francés (con decimales) y el interés total redondeado
+  // una sola vez: la corrida entera se hace sobre el saldo flotante y se redondea
+  // recién para mostrar, así los totales coinciden con la calculadora del BCP.
+  const cuotaExacta = cuotaFrancesa(capital, i, n);
+  const interesTotal = Math.round(n * cuotaExacta - capital);
+  const montoFinanciado = capital + interesTotal;
 
   const cuotas: Cuota[] = [];
-  let saldo = capital;
+  let saldoFloat = capital; // saldo exacto, en decimales
+  let saldoIni = capital; // saldo inicial mostrado (redondeado; encadena con el final anterior)
+  let interesAcum = 0;
   for (let k = 1; k <= n; k++) {
     const esUltima = k === n;
-    const interes = Math.round(saldo * i);
-    // La última cuota amortiza todo el saldo restante (ajuste por redondeo).
-    const cap = esUltima ? saldo : cuotaFija - interes;
-    const total = esUltima ? cap + interes : cuotaFija;
-    const saldoFinal = saldo - cap;
+    const interesFloat = saldoFloat * i;
+    const saldoSiguiente = saldoFloat - (cuotaExacta - interesFloat);
+    // La última cierra el saldo en cero; el resto redondea su saldo flotante.
+    const saldoFin = esUltima ? 0 : Math.round(saldoSiguiente);
+    // Capital telescópico: garantiza Σ capital = capital inicial y saldo final 0.
+    const cap = saldoIni - saldoFin;
+    // Interés redondeado sobre el saldo exacto; la última cuota absorbe el residual
+    // para que Σ interés = interés total.
+    const interes = esUltima ? interesTotal - interesAcum : Math.round(interesFloat);
     cuotas.push({
       numero: k,
       vencimiento: vencimientoCuota(input.primerVencimiento, k - 1, frecuencia),
-      saldo_inicial: saldo,
+      saldo_inicial: saldoIni,
       interes,
       capital: cap,
-      total,
-      saldo_final: saldoFinal,
+      total: cap + interes,
+      saldo_final: saldoFin,
     });
-    saldo = saldoFinal;
+    interesAcum += interes;
+    saldoFloat = saldoSiguiente;
+    saldoIni = saldoFin;
   }
-
-  const interesTotal = cuotas.reduce((a, c) => a + c.interes, 0);
-  const montoFinanciado = capital + interesTotal;
 
   return {
     precio_contado: precioContado,
     entrega_inicial: entrega,
     capital,
+    cuota_exacta: cuotaExacta,
     interes_total: interesTotal,
     monto_financiado: montoFinanciado,
     total_operacion: entrega + montoFinanciado,
