@@ -13,8 +13,9 @@
 -- política, los contratos viejos siguen calculando con lo que se firmó.
 --
 -- Reglas confirmadas por el cliente:
---   - Recargo 15% ANUAL sobre el capital (contado − entrega), prorrateado por
---     los años que dura el plan (capital × 0,15 × años), en cuotas iguales.
+--   - Financiación por amortización FRANCESA (cuota fija), tasa 15% anual
+--     (1,25% mensual) sobre el saldo. El interés de cada cuota se calcula sobre
+--     el saldo pendiente; la última cuota se ajusta para cerrar el saldo en cero.
 --   - Mora 5% diario acumulativo: 1,7% administrativo + 3,3% moratorio.
 --   - 5 días de gracia; la mora corre desde el sexto día de atraso.
 --
@@ -188,7 +189,7 @@ CREATE INDEX IF NOT EXISTS ix_codeudores_venta
 COMMENT ON TABLE dymaerp.lote_ventas IS
   'Contrato de compraventa de un lote. Congela precio y condiciones de financiamiento: si cambia la política, los contratos firmados no se alteran.';
 COMMENT ON COLUMN dymaerp.lote_ventas.recargo_pct IS
-  'Tasa ANUAL de recargo por financiar, sobre el capital (precio_contado - entrega_inicial). El recargo total del contrato se prorratea por los años del plan (capital × recargo_pct × años). Default 0.15.';
+  'Tasa nominal ANUAL de financiación. Se divide por 12 para la tasa mensual del sistema de amortización francés (cuota fija) con que se arma el plan. Default 0.15 (15% anual = 1,25% mensual).';
 COMMENT ON COLUMN dymaerp.lote_ventas.dias_gracia IS
   'Días de atraso sin mora. Con 5, la mora corre desde el sexto día.';
 COMMENT ON TABLE dymaerp.lote_venta_cuotas IS

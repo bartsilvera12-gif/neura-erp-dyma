@@ -237,7 +237,7 @@ export default function ModalVenderLote({
           <div>
             <h3 className="text-base font-semibold text-slate-900">Vender lote {lote.numero}</h3>
             <p className="mt-0.5 text-[11px] text-slate-500">
-              Recargo del {(recargo * 100).toFixed(2).replace(/\.?0+$/, "")}% anual sobre el capital, prorrateado según el plazo y repartido en cuotas iguales.
+              Cuota fija por sistema de amortización francés (calculadora del BCP), con tasa del {(recargo * 100).toFixed(2).replace(/\.?0+$/, "")}% anual sobre el saldo.
             </p>
           </div>
           <button type="button" onClick={onCancel} className="rounded-lg p-1 text-slate-400 hover:bg-slate-100">
@@ -404,9 +404,9 @@ export default function ModalVenderLote({
           <>
             <div className="mt-4 grid gap-2 rounded-xl border border-slate-200 bg-slate-50/60 p-3 sm:grid-cols-4">
               <Dato titulo="Capital" valor={fmt(p.capital, moneda)} />
-              <Dato titulo="Recargo total" valor={fmt(p.interes_total, moneda)} />
-              <Dato titulo="A financiar" valor={fmt(p.monto_financiado, moneda)} />
-              <Dato titulo="Cuota" valor={fmt(p.cuotas[0]?.total ?? 0, moneda)} destacado />
+              <Dato titulo="Total intereses" valor={fmt(p.interes_total, moneda)} />
+              <Dato titulo="Total a pagar" valor={fmt(p.monto_financiado, moneda)} />
+              <Dato titulo="Cuota fija" valor={fmt(p.cuotas[0]?.total ?? 0, moneda)} destacado />
             </div>
 
             <div className="mt-3 max-h-52 overflow-y-auto rounded-xl border border-slate-200">
@@ -416,7 +416,7 @@ export default function ModalVenderLote({
                     <th className="px-3 py-2">Cuota</th>
                     <th className="px-3 py-2">Vence</th>
                     <th className="px-3 py-2 text-right">Capital</th>
-                    <th className="px-3 py-2 text-right">Recargo</th>
+                    <th className="px-3 py-2 text-right">Interés</th>
                     <th className="px-3 py-2 text-right">Total</th>
                   </tr>
                 </thead>

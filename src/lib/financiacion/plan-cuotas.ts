@@ -2,11 +2,15 @@
  * Motor de cálculo del financiamiento de lotes.
  *
  * Reglas definidas por el cliente:
- *   - Recargo del 15% ANUAL sobre el capital financiado, prorrateado según la
- *     duración total del plan: recargo = capital × 15% × años financiados.
- *     Se reparte en cuotas iguales.
+ *   - Financiación por sistema de amortización FRANCÉS (cuota fija), igual a la
+ *     calculadora del BCP. La tasa anual (15%) se convierte a tasa del período
+ *     (15% / 12 = 1,25% mensual) y se arma una cuota fija con la fórmula
+ *     `Cuota = capital × i / (1 − (1 + i)^(−n))`. En cada cuota el interés se
+ *     calcula sobre el saldo, así el interés baja y la amortización sube; la
+ *     última cuota se ajusta para que el saldo cierre exactamente en cero.
  *   - Mora: 5% diario acumulativo sobre la cuota vencida, desglosado en
- *     1,7% de gastos administrativos y 3,3% de gastos moratorios.
+ *     1,7% de gastos administrativos y 3,3% de gastos moratorios. Se calcula
+ *     aparte y NO se mezcla con el interés de financiación.
  *   - 5 días de gracia: la mora recién corre a partir del sexto día de atraso.
  *
  * Todo es función pura y sin dependencias: la aritmética del dinero se prueba
@@ -14,11 +18,9 @@
  */
 
 /**
- * Recargo ANUAL por financiar, sobre el capital.
- *
- * Es una tasa por año, no un total: el recargo efectivo del plan se prorratea
- * por la cantidad de años que dura (`capital × tasa × años`). Un plan a 5 años
- * paga cinco veces esta tasa; uno a 6 meses, la mitad.
+ * Tasa nominal ANUAL de financiación. Se divide por 12 para la tasa mensual del
+ * sistema francés (15% → 1,25% mensual). No es un recargo total: el interés
+ * total sale de la amortización y depende del plazo.
  */
 export const RECARGO_FINANCIACION = 0.15;
 
@@ -44,22 +46,26 @@ export interface Cuota {
   numero: number;
   /** YYYY-MM-DD */
   vencimiento: string;
-  /** Parte de la cuota que amortiza capital. */
-  capital: number;
-  /** Parte de la cuota que corresponde al recargo anual prorrateado. */
+  /** Saldo de capital al iniciar el período (antes de pagar esta cuota). */
+  saldo_inicial: number;
+  /** Interés del período = saldo_inicial × tasa del período. Baja cuota a cuota. */
   interes: number;
-  /** Lo que el cliente paga ese mes. */
+  /** Capital amortizado en esta cuota = total − interes. Sube cuota a cuota. */
+  capital: number;
+  /** Lo que el cliente paga ese mes (cuota fija; la última puede diferir por redondeo). */
   total: number;
+  /** Saldo de capital después de pagar esta cuota. En la última queda en 0. */
+  saldo_final: number;
 }
 
 export interface PlanCuotas {
   precio_contado: number;
   entrega_inicial: number;
-  /** Lo que queda a financiar antes del recargo. */
+  /** Capital financiado (precio de contado − entrega inicial). */
   capital: number;
-  /** Recargo anual prorrateado por el plazo: capital × tasa × años. */
+  /** Suma de los intereses de todas las cuotas del sistema francés. */
   interes_total: number;
-  /** Capital + recargo: lo que se reparte en cuotas. */
+  /** Capital + interés total = total a pagar del saldo financiado (suma de las cuotas). */
   monto_financiado: number;
   /** Entrega + monto financiado: lo que termina pagando el cliente. */
   total_operacion: number;
@@ -134,15 +140,25 @@ export function mesesPorCuota(frecuencia: Frecuencia): number {
 }
 
 /**
- * Años que dura el plan completo, para prorratear el recargo anual.
+ * Tasa de interés del período, a partir de la tasa nominal anual.
  *
- * Sale de la duración real —cantidad de cuotas por el largo de cada una—, no de
- * asumir cuotas mensuales: 60 cuotas mensuales son 5 años, pero 60 bimestrales
- * son 10. Es fraccionario a propósito: un plan a 18 meses paga 1,5 años de
- * recargo, no 2.
+ * La anual se prorratea por los meses que abarca cada cuota: mensual = anual/12
+ * (15% → 1,25%), bimestral = anual/6, quincenal = anual/24. Así una misma tasa
+ * anual sirve para cualquier frecuencia sin cambiar la fórmula.
  */
-export function aniosDelPlan(cantidadCuotas: number, frecuencia: Frecuencia): number {
-  return (cantidadCuotas * mesesPorCuota(frecuencia)) / 12;
+export function tasaPeriodica(recargoAnual: number, frecuencia: Frecuencia): number {
+  return (recargoAnual * mesesPorCuota(frecuencia)) / 12;
+}
+
+/**
+ * Cuota fija del sistema de amortización francés (la de la calculadora del BCP):
+ *   Cuota = capital × i / (1 − (1 + i)^(−n))
+ * Con tasa 0 (venta sin recargo) es el capital repartido en partes iguales.
+ * Devuelve el valor exacto sin redondear; el redondeo lo hace quien la usa.
+ */
+export function cuotaFrancesa(capital: number, i: number, n: number): number {
+  if (i <= 0) return capital / n;
+  return (capital * i) / (1 - Math.pow(1 + i, -n));
 }
 
 /** Días corridos entre dos fechas YYYY-MM-DD. Positivo si `hasta` es posterior. */
@@ -151,20 +167,18 @@ export function diasEntre(desde: string, hasta: string): number {
 }
 
 /**
- * Arma el plan de cuotas.
+ * Arma el plan de cuotas por amortización francesa (cuota fija), igual a la
+ * calculadora del BCP.
  *
- * El recargo anual se aplica sobre el CAPITAL (precio de contado menos la
- * entrega inicial), no sobre el precio de lista: lo que se paga al contado el
- * primer día no se está financiando, así que no corresponde recargarlo.
+ * Se financia sólo el CAPITAL (precio de contado menos la entrega inicial): lo
+ * que se paga al contado el primer día no se financia. Con la tasa del período
+ * (anual/12 para mensual) se calcula una cuota fija y, cuota a cuota, el interés
+ * se cobra sobre el saldo pendiente —así baja— y el resto amortiza capital
+ * —así sube—.
  *
- * Y se prorratea por los años que dura el plan: `capital × tasa × años`. La
- * tasa es anual, así que un plan más largo acumula más recargo. Como el recargo
- * total se reparte parejo, el interés de cada cuota queda fijo e igual a
- * `capital × tasa × (meses de la cuota / 12)`, independiente de cuántas sean.
- *
- * Los guaraníes no tienen centavos, así que todo se redondea a entero y la
- * última cuota absorbe la diferencia. De esa forma la suma de las cuotas es
- * siempre exactamente el monto financiado, sin desvíos de uno o dos guaraníes.
+ * Los guaraníes no tienen centavos: la cuota y cada interés se redondean a
+ * entero, y la última cuota se ajusta para que el saldo cierre exactamente en
+ * cero. Por eso la suma de las cuotas es siempre exactamente el monto financiado.
  */
 export function generarPlanCuotas(input: {
   precioContado: number;
@@ -196,29 +210,35 @@ export function generarPlanCuotas(input: {
   }
 
   const capital = precioContado - entrega;
-  // Recargo anual prorrateado por la duración del plan: capital × tasa × años.
-  const interesTotal = Math.round(capital * recargo * aniosDelPlan(n, frecuencia));
-  const montoFinanciado = capital + interesTotal;
+  const i = tasaPeriodica(recargo, frecuencia);
 
-  // Cuota pareja para las n-1 primeras; la última cierra el total exacto.
-  const cuotaBase = Math.round(montoFinanciado / n);
-  const capitalBase = Math.round(capital / n);
-  const interesBase = Math.round(interesTotal / n);
+  // Cuota fija del sistema francés, redondeada al guaraní. Las primeras n-1 salen
+  // por esta cuota; la última amortiza el saldo que quede para cerrar en cero.
+  const cuotaFija = Math.round(cuotaFrancesa(capital, i, n));
 
   const cuotas: Cuota[] = [];
-  for (let i = 1; i <= n; i++) {
-    const esUltima = i === n;
-    const total = esUltima ? montoFinanciado - cuotaBase * (n - 1) : cuotaBase;
-    const cap = esUltima ? capital - capitalBase * (n - 1) : capitalBase;
-    const int = esUltima ? interesTotal - interesBase * (n - 1) : interesBase;
+  let saldo = capital;
+  for (let k = 1; k <= n; k++) {
+    const esUltima = k === n;
+    const interes = Math.round(saldo * i);
+    // La última cuota amortiza todo el saldo restante (ajuste por redondeo).
+    const cap = esUltima ? saldo : cuotaFija - interes;
+    const total = esUltima ? cap + interes : cuotaFija;
+    const saldoFinal = saldo - cap;
     cuotas.push({
-      numero: i,
-      vencimiento: vencimientoCuota(input.primerVencimiento, i - 1, frecuencia),
+      numero: k,
+      vencimiento: vencimientoCuota(input.primerVencimiento, k - 1, frecuencia),
+      saldo_inicial: saldo,
+      interes,
       capital: cap,
-      interes: int,
       total,
+      saldo_final: saldoFinal,
     });
+    saldo = saldoFinal;
   }
+
+  const interesTotal = cuotas.reduce((a, c) => a + c.interes, 0);
+  const montoFinanciado = capital + interesTotal;
 
   return {
     precio_contado: precioContado,
@@ -239,7 +259,7 @@ export interface Simulacion extends PlanCuotas {
   frecuencia: Frecuencia;
   recargo_pct: number;
   cantidad_cuotas: number;
-  /** La cuota pareja del plan (las primeras n-1). */
+  /** La cuota fija del plan (las primeras n-1). */
   cuota: number;
   /** La última, que absorbe el redondeo. Puede diferir en unos guaraníes. */
   cuota_final: number;
@@ -294,24 +314,27 @@ export function simularPlan(input: {
   if (input.cuotaPropuesta != null && input.cuotaPropuesta > 0) {
     modo = "por_cuota";
     propuesta = Math.round(input.cuotaPropuesta);
-    // Con el recargo anual prorrateado, el interés de cada cuota es fijo
-    // (capital × tasa × meses/12) y no depende de cuántas cuotas haya. Así la
-    // parte de la cuota que amortiza capital es `propuesta − interésPorCuota`, y
-    // la cantidad sale de dividir el capital por eso. Esto rompe la dependencia
-    // circular de "el monto financiado depende de n y n del monto financiado".
-    const interesPorCuota = capital * recargo * mesesPorCuota(frecuencia) / 12;
-    const amortizaPorCuota = propuesta - interesPorCuota;
-    if (amortizaPorCuota <= 0) {
-      const minimaCubreInteres = Math.ceil(interesPorCuota + capital / MAX_CUOTAS);
-      throw new Error(
-        `La cuota de ${propuesta.toLocaleString("es-PY")} no alcanza a cubrir el recargo del período ` +
-          `(${Math.ceil(interesPorCuota).toLocaleString("es-PY")}): el saldo nunca bajaría. ` +
-          `La cuota mínima es ${minimaCubreInteres.toLocaleString("es-PY")}.`
-      );
+    // Sistema francés al revés: dada la cuota, se despeja la cantidad de meses de
+    //   Cuota = capital × i / (1 − (1 + i)^(−n))   =>   n = −ln(1 − capital·i/Cuota) / ln(1+i)
+    // La cuota tiene que superar el interés del primer período; si no, el saldo
+    // nunca baja y el plan sería infinito.
+    const i = tasaPeriodica(recargo, frecuencia);
+    if (i <= 0) {
+      n = Math.max(1, Math.ceil(capital / propuesta));
+    } else {
+      const interesPrimero = capital * i;
+      if (propuesta <= interesPrimero) {
+        const minima = Math.ceil(cuotaFrancesa(capital, i, MAX_CUOTAS));
+        throw new Error(
+          `La cuota de ${propuesta.toLocaleString("es-PY")} no alcanza a cubrir el interés del período ` +
+            `(${Math.ceil(interesPrimero).toLocaleString("es-PY")}): el saldo nunca bajaría. ` +
+            `La cuota mínima es ${minima.toLocaleString("es-PY")}.`
+        );
+      }
+      n = Math.max(1, Math.ceil(-Math.log(1 - (capital * i) / propuesta) / Math.log(1 + i)));
     }
-    n = Math.max(1, Math.ceil(capital / amortizaPorCuota));
     if (n > MAX_CUOTAS) {
-      const minima = Math.ceil(interesPorCuota + capital / MAX_CUOTAS);
+      const minima = Math.ceil(cuotaFrancesa(capital, i, MAX_CUOTAS));
       throw new Error(
         `Con una cuota de ${propuesta.toLocaleString("es-PY")} harían falta ${n.toLocaleString("es-PY")} cuotas. ` +
           `La cuota mínima para entrar en ${MAX_CUOTAS} es ${minima.toLocaleString("es-PY")}.`

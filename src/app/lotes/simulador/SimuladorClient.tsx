@@ -396,7 +396,7 @@ export default function SimuladorClient() {
               />
             </div>
             <div>
-              <label className={labelClass}>Recargo anual (%)</label>
+              <label className={labelClass}>Tasa anual (%)</label>
               <input
                 type="number"
                 min={0}
@@ -408,7 +408,7 @@ export default function SimuladorClient() {
                 className={inputClass}
               />
               <p className="mt-1 text-[10px] text-slate-400">
-                El estándar es {RECARGO_FINANCIACION * 100}% anual (se prorratea por el plazo). Ponelo en 0 para una condición especial.
+                El estándar es {RECARGO_FINANCIACION * 100}% anual (cuota fija, sistema francés). Ponelo en 0 para una condición especial.
               </p>
             </div>
           </div>
@@ -463,9 +463,12 @@ export default function SimuladorClient() {
                   <Fila k="Entrega" v={gs(p.entrega_inicial)} />
                   <Fila k="Saldo a financiar" v={gs(p.capital)} />
                   {p.interes_total > 0 ? (
-                    <Fila k={`Recargo total (${(p.recargo_pct * 100).toFixed(2).replace(/\.?0+$/, "")}% anual)`} v={gs(p.interes_total)} />
+                    <Fila
+                      k={`Total de intereses (${(p.recargo_pct * 100).toFixed(2).replace(/\.?0+$/, "")}% anual)`}
+                      v={gs(p.interes_total)}
+                    />
                   ) : null}
-                  <Fila k="Saldo financiado" v={gs(p.monto_financiado)} destacado />
+                  <Fila k="Total a pagar del saldo" v={gs(p.monto_financiado)} destacado />
                 </dl>
               </div>
 
@@ -493,13 +496,17 @@ export default function SimuladorClient() {
                 </p>
               </div>
 
-              <div className="max-h-72 overflow-y-auto rounded-2xl border border-slate-200 bg-white">
-                <table className="w-full text-xs">
+              <div className="max-h-72 overflow-auto rounded-2xl border border-slate-200 bg-white">
+                <table className="w-full min-w-[46rem] text-xs">
                   <thead className="sticky top-0 bg-slate-50">
                     <tr className="text-left text-[10px] font-semibold uppercase tracking-wider text-slate-500">
                       <th className="px-3 py-2">#</th>
                       <th className="px-3 py-2">Vence</th>
+                      <th className="px-3 py-2 text-right">Saldo inicial</th>
+                      <th className="px-3 py-2 text-right">Interés</th>
+                      <th className="px-3 py-2 text-right">Capital</th>
                       <th className="px-3 py-2 text-right">Cuota</th>
+                      <th className="px-3 py-2 text-right">Saldo final</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
@@ -507,9 +514,13 @@ export default function SimuladorClient() {
                       <tr key={c.numero}>
                         <td className="px-3 py-1.5 text-slate-600">{c.numero}</td>
                         <td className="px-3 py-1.5 tabular-nums text-slate-600">{fmtFecha(c.vencimiento)}</td>
+                        <td className="px-3 py-1.5 text-right tabular-nums text-slate-600">{gs(c.saldo_inicial)}</td>
+                        <td className="px-3 py-1.5 text-right tabular-nums text-slate-600">{gs(c.interes)}</td>
+                        <td className="px-3 py-1.5 text-right tabular-nums text-slate-600">{gs(c.capital)}</td>
                         <td className="px-3 py-1.5 text-right font-semibold tabular-nums text-slate-900">
                           {gs(c.total)}
                         </td>
+                        <td className="px-3 py-1.5 text-right tabular-nums text-slate-600">{gs(c.saldo_final)}</td>
                       </tr>
                     ))}
                   </tbody>

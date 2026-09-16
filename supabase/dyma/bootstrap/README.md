@@ -66,11 +66,12 @@ o loteamiento si no cuelga de ellos ningún lote reservado, vendido o bloqueado.
 Reglas definidas por el cliente, congeladas en cada contrato para que un cambio
 de política no altere lo ya firmado:
 
-- Recargo del **15% anual** sobre el capital (contado − entrega inicial),
-  **prorrateado por los años que dura el plan** (`capital × 0,15 × años`) y
-  repartido en cuotas iguales. Un plan a 5 años (60 cuotas mensuales) paga cinco
-  veces la tasa; uno a 6 meses, la mitad. No se aplica sobre el precio de lista:
-  lo que se paga al contado el primer día no se está financiando.
+- Financiación por **amortización francesa** (cuota fija), igual a la calculadora
+  del BCP: tasa **15% anual** (1,25% mensual) sobre el **saldo** (contado −
+  entrega inicial). El interés de cada cuota se cobra sobre el saldo pendiente,
+  así el interés baja y la amortización de capital sube; la última cuota se
+  ajusta para que el saldo cierre exactamente en cero. No se financia lo que se
+  paga al contado el primer día (la entrega inicial).
 - Mora del **5% diario acumulativo** sobre el saldo impago de la cuota, desglosada
   en 1,7% de gastos administrativos y 3,3% moratorios.
 - **5 días de gracia**: la mora corre desde el sexto día de atraso.
