@@ -47,6 +47,11 @@ interface SupabaseRow {
   sifen_descripcion_tipo_doc?: string | null;
   nacionalidad:       string | null;
   estado_civil:       string | null;
+  conyuge_nombre:        string | null;
+  conyuge_documento:     string | null;
+  conyuge_profesion:     string | null;
+  conyuge_lugar_trabajo: string | null;
+  conyuge_telefono:      string | null;
   sitio_web:          string | null;
   instagram:          string | null;
   linkedin:           string | null;
@@ -104,6 +109,11 @@ function rowToCliente(row: SupabaseRow): Cliente {
     pais:                row.pais ?? undefined,
     nacionalidad:        row.nacionalidad ?? undefined,
     estado_civil:        row.estado_civil ?? undefined,
+    conyuge_nombre:        row.conyuge_nombre ?? undefined,
+    conyuge_documento:     row.conyuge_documento ?? undefined,
+    conyuge_profesion:     row.conyuge_profesion ?? undefined,
+    conyuge_lugar_trabajo: row.conyuge_lugar_trabajo ?? undefined,
+    conyuge_telefono:      row.conyuge_telefono ?? undefined,
     sitio_web:           row.sitio_web ?? undefined,
     instagram:           row.instagram ?? undefined,
     linkedin:            row.linkedin ?? undefined,
@@ -294,6 +304,11 @@ export async function saveCliente(datos: NuevoClienteData): Promise<Cliente | nu
     pais:               datos.pais ?? null,
     nacionalidad:       datos.nacionalidad ?? null,
     estado_civil:       datos.estado_civil ?? null,
+    conyuge_nombre:        datos.conyuge_nombre ?? null,
+    conyuge_documento:     datos.conyuge_documento ?? null,
+    conyuge_profesion:     datos.conyuge_profesion ?? null,
+    conyuge_lugar_trabajo: datos.conyuge_lugar_trabajo ?? null,
+    conyuge_telefono:      datos.conyuge_telefono ?? null,
     sitio_web:          datos.sitio_web ?? null,
     instagram:          datos.instagram ?? null,
     linkedin:           datos.linkedin ?? null,
@@ -371,6 +386,11 @@ type CampoBorrable =
   | "pais"
   | "nacionalidad"
   | "estado_civil"
+  | "conyuge_nombre"
+  | "conyuge_documento"
+  | "conyuge_profesion"
+  | "conyuge_lugar_trabajo"
+  | "conyuge_telefono"
   | "sitio_web"
   | "instagram"
   | "linkedin"
@@ -485,6 +505,11 @@ export function construirPatchActualizacionCliente(datos: ActualizarClienteInput
   }
   if (datos.nacionalidad !== undefined) patch.nacionalidad = textoOpcional(datos.nacionalidad);
   if (datos.estado_civil !== undefined) patch.estado_civil = textoOpcional(datos.estado_civil);
+  if (datos.conyuge_nombre !== undefined) patch.conyuge_nombre = textoOpcional(datos.conyuge_nombre);
+  if (datos.conyuge_documento !== undefined) patch.conyuge_documento = textoOpcional(datos.conyuge_documento);
+  if (datos.conyuge_profesion !== undefined) patch.conyuge_profesion = textoOpcional(datos.conyuge_profesion);
+  if (datos.conyuge_lugar_trabajo !== undefined) patch.conyuge_lugar_trabajo = textoOpcional(datos.conyuge_lugar_trabajo);
+  if (datos.conyuge_telefono !== undefined) patch.conyuge_telefono = textoOpcional(datos.conyuge_telefono);
   if (datos.sitio_web !== undefined) patch.sitio_web = textoOpcional(datos.sitio_web);
   if (datos.instagram !== undefined) patch.instagram = textoOpcional(datos.instagram);
   if (datos.linkedin !== undefined) patch.linkedin = textoOpcional(datos.linkedin);

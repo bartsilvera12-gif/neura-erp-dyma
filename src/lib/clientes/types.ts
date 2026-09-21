@@ -52,6 +52,13 @@ export interface Cliente {
   nacionalidad?:       string;
   estado_civil?:       string;
 
+  /** Datos del cónyuge (para contratos que lo requieren). Se cargan en la ficha. */
+  conyuge_nombre?:        string;
+  conyuge_documento?:     string;   // CI del cónyuge
+  conyuge_profesion?:     string;
+  conyuge_lugar_trabajo?: string;
+  conyuge_telefono?:      string;
+
   /** El cliente requiere nota de remisión al venderle (documento no fiscal). */
   usa_nota_remision?:  boolean;
 

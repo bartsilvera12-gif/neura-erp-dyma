@@ -198,6 +198,23 @@ export async function cargarDatosContrato(
   const conyugeRow = partes.find((p) => p.rol === "conyuge") ?? null;
   const codeudores = partes.filter((p) => p.rol === "codeudor").map(aPersona);
 
+  // Cónyuge guardado en la ficha del cliente. Se usa cuando el tipo de contrato
+  // requiere cónyuge y la venta no trae uno cargado a mano. La nacionalidad, el
+  // estado civil y el domicilio se toman del titular (un matrimonio los comparte);
+  // si algo difiere, se carga el cónyuge de la venta y ese manda.
+  const conyugeDesdeCliente = (): PersonaContrato | null => {
+    const nombre = String(cli?.conyuge_nombre ?? "").trim();
+    if (!nombre) return null;
+    return {
+      nombre,
+      documento: (cli?.conyuge_documento as string) || null,
+      nacionalidad: (cli?.nacionalidad as string) ?? null,
+      estado_civil: (cli?.estado_civil as string) ?? null,
+      domicilio: (cli?.direccion as string) ?? null,
+    };
+  };
+  const requiereConyuge = tipo?.requiere_conyuge === true;
+
   const inmueble: InmuebleContrato = {
     loteamiento: (loteamiento?.nombre as string) ?? null,
     // La fracción del contrato es la registral, cargada una vez en el
@@ -256,7 +273,7 @@ export async function cargarDatosContrato(
     config,
     tipo,
     comprador,
-    conyuge: conyugeRow ? aPersona(conyugeRow) : null,
+    conyuge: conyugeRow ? aPersona(conyugeRow) : requiereConyuge ? conyugeDesdeCliente() : null,
     codeudores,
     inmueble,
     operacion: {

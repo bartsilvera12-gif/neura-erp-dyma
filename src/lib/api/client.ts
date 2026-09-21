@@ -90,6 +90,11 @@ export async function apiCreateCliente(data: {
   pais?: string;
   nacionalidad?: string;
   estado_civil?: string;
+  conyuge_nombre?: string;
+  conyuge_documento?: string;
+  conyuge_profesion?: string;
+  conyuge_lugar_trabajo?: string;
+  conyuge_telefono?: string;
   sitio_web?: string;
   instagram?: string;
   linkedin?: string;

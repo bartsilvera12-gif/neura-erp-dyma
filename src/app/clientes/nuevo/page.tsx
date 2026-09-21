@@ -62,6 +62,11 @@ function NuevoClienteForm() {
     documento:           "",
     profesion:           "",
     lugar_trabajo:       "",
+    conyuge_nombre:        "",
+    conyuge_documento:     "",
+    conyuge_profesion:     "",
+    conyuge_lugar_trabajo: "",
+    conyuge_telefono:      "",
     telefono:            "",
     telefono_secundario: "",
     email:               "",
@@ -189,7 +194,7 @@ function NuevoClienteForm() {
     return () => { cancelled = true; };
   }, [fromCrmId]);
 
-  const upper = ["empresa", "nombre_contacto", "ciudad", "pais", "vendedor_asignado", "condicion_pago", "direccion", "sifen_codigo_pais", "profesion", "lugar_trabajo"];
+  const upper = ["empresa", "nombre_contacto", "ciudad", "pais", "vendedor_asignado", "condicion_pago", "direccion", "sifen_codigo_pais", "profesion", "lugar_trabajo", "conyuge_nombre", "conyuge_profesion", "conyuge_lugar_trabajo"];
   const lower = ["email", "email_secundario"];
 
   function handleChange(
@@ -308,6 +313,11 @@ function NuevoClienteForm() {
       documento: form.documento.trim() || undefined,
       profesion: form.profesion.trim().toUpperCase() || undefined,
       lugar_trabajo: form.lugar_trabajo.trim().toUpperCase() || undefined,
+      conyuge_nombre: form.conyuge_nombre.trim().toUpperCase() || undefined,
+      conyuge_documento: form.conyuge_documento.trim() || undefined,
+      conyuge_profesion: form.conyuge_profesion.trim().toUpperCase() || undefined,
+      conyuge_lugar_trabajo: form.conyuge_lugar_trabajo.trim().toUpperCase() || undefined,
+      conyuge_telefono: form.conyuge_telefono.trim() || undefined,
       telefono: form.telefono.trim() || undefined,
       telefono_secundario: form.telefono_secundario.trim() || undefined,
       email: form.email.trim() || undefined,
@@ -536,6 +546,72 @@ function NuevoClienteForm() {
                   placeholder="Empresa o institución donde trabaja"
                   className={`${inputClass} uppercase`}
                 />
+              </div>
+            </div>
+
+            <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50/60 p-3">
+              <p className="mb-1 text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+                Datos del cónyuge
+              </p>
+              <p className="mb-3 text-[11px] text-slate-400">
+                Para los contratos que requieren cónyuge: si se cargan acá, el contrato los usa automáticamente.
+              </p>
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div>
+                  <label className={labelClass}>Nombre y apellido</label>
+                  <input
+                    type="text"
+                    name="conyuge_nombre"
+                    value={form.conyuge_nombre}
+                    onChange={handleChange}
+                    placeholder="Nombre del cónyuge"
+                    className={`${inputClass} uppercase`}
+                  />
+                </div>
+                <div>
+                  <label className={labelClass}>CI</label>
+                  <input
+                    type="text"
+                    name="conyuge_documento"
+                    value={form.conyuge_documento}
+                    onChange={handleChange}
+                    placeholder="CI sin puntos"
+                    className={inputClass}
+                  />
+                </div>
+                <div>
+                  <label className={labelClass}>Profesión / Ocupación</label>
+                  <input
+                    type="text"
+                    name="conyuge_profesion"
+                    value={form.conyuge_profesion}
+                    onChange={handleChange}
+                    placeholder="A qué se dedica"
+                    className={`${inputClass} uppercase`}
+                  />
+                </div>
+                <div>
+                  <label className={labelClass}>Lugar de trabajo</label>
+                  <input
+                    type="text"
+                    name="conyuge_lugar_trabajo"
+                    value={form.conyuge_lugar_trabajo}
+                    onChange={handleChange}
+                    placeholder="Dónde trabaja"
+                    className={`${inputClass} uppercase`}
+                  />
+                </div>
+                <div>
+                  <label className={labelClass}>Teléfono</label>
+                  <input
+                    type="text"
+                    name="conyuge_telefono"
+                    value={form.conyuge_telefono}
+                    onChange={handleChange}
+                    placeholder="0981-000000"
+                    className={inputClass}
+                  />
+                </div>
               </div>
             </div>
           </section>

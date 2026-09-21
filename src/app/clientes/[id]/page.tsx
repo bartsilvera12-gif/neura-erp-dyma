@@ -183,6 +183,11 @@ export default function ClienteDetailPage() {
     pais:                "",
     nacionalidad:        "",
     estado_civil:        "",
+    conyuge_nombre:        "",
+    conyuge_documento:     "",
+    conyuge_profesion:     "",
+    conyuge_lugar_trabajo: "",
+    conyuge_telefono:      "",
     sitio_web:           "",
     instagram:           "",
     linkedin:            "",
@@ -305,6 +310,11 @@ export default function ClienteDetailPage() {
         pais:                c.pais                ?? "",
         nacionalidad:        c.nacionalidad        ?? "",
         estado_civil:        c.estado_civil        ?? "",
+        conyuge_nombre:        c.conyuge_nombre        ?? "",
+        conyuge_documento:     c.conyuge_documento     ?? "",
+        conyuge_profesion:     c.conyuge_profesion     ?? "",
+        conyuge_lugar_trabajo: c.conyuge_lugar_trabajo ?? "",
+        conyuge_telefono:      c.conyuge_telefono      ?? "",
         sitio_web:           c.sitio_web           ?? "",
         instagram:           c.instagram           ?? "",
         linkedin:            c.linkedin            ?? "",
@@ -454,7 +464,7 @@ export default function ClienteDetailPage() {
     }
   }, [form.condicion_pago, id]);
 
-  const upper = ["empresa", "nombre_contacto", "ciudad", "pais", "vendedor_asignado", "condicion_pago", "direccion", "sifen_codigo_pais", "profesion", "lugar_trabajo"];
+  const upper = ["empresa", "nombre_contacto", "ciudad", "pais", "vendedor_asignado", "condicion_pago", "direccion", "sifen_codigo_pais", "profesion", "lugar_trabajo", "conyuge_nombre", "conyuge_profesion", "conyuge_lugar_trabajo"];
   const lower = ["email", "email_secundario"];
 
   function handleChange(e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) {
@@ -586,6 +596,11 @@ export default function ClienteDetailPage() {
         pais:                form.pais.trim().toUpperCase()    || null,
         nacionalidad:        form.nacionalidad.trim()        || null,
         estado_civil:        form.estado_civil.trim()        || null,
+        conyuge_nombre:        form.conyuge_nombre.trim()        || null,
+        conyuge_documento:     form.conyuge_documento.trim()     || null,
+        conyuge_profesion:     form.conyuge_profesion.trim()     || null,
+        conyuge_lugar_trabajo: form.conyuge_lugar_trabajo.trim() || null,
+        conyuge_telefono:      form.conyuge_telefono.trim()      || null,
         sitio_web:           form.sitio_web.trim()           || null,
         instagram:           form.instagram.trim()           || null,
         linkedin:            form.linkedin.trim()            || null,
@@ -1454,6 +1469,72 @@ export default function ClienteDetailPage() {
                       placeholder="Empresa o institución donde trabaja"
                       className={`${inputClass} uppercase`}
                     />
+                  </div>
+                </div>
+
+                <div className="mt-2 rounded-xl border border-slate-200 bg-slate-50/60 p-3">
+                  <p className="mb-1 text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+                    Datos del cónyuge
+                  </p>
+                  <p className="mb-3 text-[11px] text-slate-400">
+                    Para los contratos que requieren cónyuge: si están cargados acá, el contrato los usa automáticamente.
+                  </p>
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                    <div>
+                      <label className={labelClass}>Nombre y apellido</label>
+                      <input
+                        type="text"
+                        name="conyuge_nombre"
+                        value={form.conyuge_nombre}
+                        onChange={handleChange}
+                        placeholder="Nombre del cónyuge"
+                        className={`${inputClass} uppercase`}
+                      />
+                    </div>
+                    <div>
+                      <label className={labelClass}>CI</label>
+                      <input
+                        type="text"
+                        name="conyuge_documento"
+                        value={form.conyuge_documento}
+                        onChange={handleChange}
+                        placeholder="CI sin puntos"
+                        className={inputClass}
+                      />
+                    </div>
+                    <div>
+                      <label className={labelClass}>Profesión / Ocupación</label>
+                      <input
+                        type="text"
+                        name="conyuge_profesion"
+                        value={form.conyuge_profesion}
+                        onChange={handleChange}
+                        placeholder="A qué se dedica"
+                        className={`${inputClass} uppercase`}
+                      />
+                    </div>
+                    <div>
+                      <label className={labelClass}>Lugar de trabajo</label>
+                      <input
+                        type="text"
+                        name="conyuge_lugar_trabajo"
+                        value={form.conyuge_lugar_trabajo}
+                        onChange={handleChange}
+                        placeholder="Dónde trabaja"
+                        className={`${inputClass} uppercase`}
+                      />
+                    </div>
+                    <div>
+                      <label className={labelClass}>Teléfono</label>
+                      <input
+                        type="text"
+                        name="conyuge_telefono"
+                        value={form.conyuge_telefono}
+                        onChange={handleChange}
+                        placeholder="0981-000000"
+                        className={inputClass}
+                      />
+                    </div>
                   </div>
                 </div>
               </section>
