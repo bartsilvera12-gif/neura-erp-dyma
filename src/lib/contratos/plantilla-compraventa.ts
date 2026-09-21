@@ -191,12 +191,18 @@ export function plantillaCompraventaPlazos(datos: DatosContrato, opciones?: { au
   table.cuotas td{text-align:right}
   table.cuotas td.c{text-align:center}
   table.cuotas tfoot td{background:#f9fafb;font-weight:700}
-  table.cuotas tr{break-inside:avoid}
+  table.cuotas tr{break-inside:avoid;page-break-inside:avoid}
   .toolbar{max-width:210mm;margin:12px auto;text-align:right}
   .toolbar button{font-family:system-ui,sans-serif;font-size:13px;padding:8px 16px;border-radius:8px;border:1px solid #0EA5E9;background:#0EA5E9;color:#fff;cursor:pointer}
   @media print{
     body{background:#fff} .toolbar{display:none} .page{width:auto;padding:0;margin:0}
-    .anexo{break-before:page}
+    /* El Plan de pago (anexo) SIEMPRE arranca en pagina nueva: las firmas y sellos
+       del contrato quedan en la pagina del contrato. Se usan las dos propiedades
+       (moderna y legacy) porque Chrome, al imprimir o guardar PDF, respeta la
+       legacy page-break-before en paginacion donde ignora break-before. */
+    .anexo{break-before:page;page-break-before:always}
+    /* El título y la primera fila no se separan del salto. */
+    .anexo h3{break-after:avoid;page-break-after:avoid}
     thead{display:table-header-group}
     @page{size:A4;margin:18mm}
   }
