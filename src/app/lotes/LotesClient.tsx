@@ -169,10 +169,15 @@ export default function LotesClient() {
       arr.push(l);
       porManzana.set(l.manzana_id, arr);
     }
+    // La Carta de Lotes se ordena por número de lote (1, 2, 3… 22), no por el
+    // orden en que llegan ni por superficie. `numero` es texto, así que se compara
+    // en modo numérico: así 2 va antes que 10 y sigue andando si el número trae un
+    // sufijo (12A, 12B).
+    const porNumero = (a: Lote, b: Lote) => a.numero.localeCompare(b.numero, "es", { numeric: true });
     return manzanasDelLoteamiento
       .filter((m) => (manzanaId ? m.id === manzanaId : true))
       .filter((m) => (filtroEstado ? porManzana.has(m.id) : true))
-      .map((m) => ({ manzana: m, lotes: porManzana.get(m.id) ?? [] }));
+      .map((m) => ({ manzana: m, lotes: (porManzana.get(m.id) ?? []).slice().sort(porNumero) }));
   }, [data, manzanasDelLoteamiento, manzanaId, filtroEstado]);
 
   const resumen = data?.resumen;
