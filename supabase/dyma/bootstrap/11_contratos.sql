@@ -164,7 +164,7 @@ END $$;
 -- ---------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS dymaerp.contrato_config (
   empresa_id uuid NOT NULL,
-  razon_social text DEFAULT 'DYMA SA'::text NOT NULL,
+  razon_social text DEFAULT 'CORPORACIÓN DYMA S.A.'::text NOT NULL,
   ruc text,
   representante_nombre text,
   representante_documento text,
@@ -280,7 +280,7 @@ ON CONFLICT (empresa_id, slug) DO UPDATE
 INSERT INTO dymaerp.contrato_config
   (empresa_id, razon_social, ruc, representante_nombre, domicilio, ciudad_firma, departamento)
 VALUES
-  ('06255def-3835-4d37-8f7f-801af8043e8c', 'DYMA SA', '80149103-7', 'Rody Sebastian Verdún Rios',
+  ('06255def-3835-4d37-8f7f-801af8043e8c', 'CORPORACIÓN DYMA S.A.', '80149103-7', 'Rody Sebastian Verdún Rios',
    'Calle Monday, Barrio San Juan, Juan Emilio O''Leary - Alto Paraná',
    'Juan E. O''Leary', 'Alto Paraná')
 ON CONFLICT (empresa_id) DO NOTHING;

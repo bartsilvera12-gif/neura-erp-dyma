@@ -151,7 +151,7 @@ export async function cargarDatosContrato(
   }
 
   const config: ContratoConfig = {
-    razon_social: String(cfgRow?.razon_social ?? "DYMA SA"),
+    razon_social: String(cfgRow?.razon_social ?? "CORPORACIÓN DYMA S.A."),
     ruc: (cfgRow?.ruc as string) ?? null,
     representante_nombre: (cfgRow?.representante_nombre as string) ?? null,
     representante_documento: (cfgRow?.representante_documento as string) ?? null,
