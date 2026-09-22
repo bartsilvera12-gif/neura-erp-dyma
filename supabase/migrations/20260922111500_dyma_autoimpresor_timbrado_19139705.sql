@@ -26,7 +26,7 @@ INSERT INTO dymaerp.empresa_autoimpresor_config (
   observaciones
 )
 VALUES (
-  '06255def-3835-4d37-8f7f-801af8043e8c', true,
+  '06255def-3835-4d37-8f7f-801af8043e8c', false,
   '80149103-7', 'CORPORACION DYMA S.A.', 'DYMA INMOBILIARIA',
   E'INVERSORES DE EMPRENDIMIENTOS INMOBILIARIOS\nACTIVIDADES INMOBILIARIAS REALIZADAS CON BIENES PROPIOS O ARRENDADOS',
   E'AV. LA RESIDENTA A UNA CUADRA Y MEDIA DE LA COMISARIA\nJUAN E. O''LEARY - ALTO PARANÁ - PARAGUAY',
@@ -35,7 +35,7 @@ VALUES (
   '003', '002',
   1, 5000, 1,
   'factura', 'pdf_a4',
-  'Autoimpresor autorizado por DNIT — FORM.350-1 N° 350010038781, fecha 21/09/2026. Rango autorizado 003-002-0000001 a 003-002-0005000.'
+  'Datos cargados desde FORM.350-1 N° 350010038781, fecha 21/09/2026. Rango 003-002-0000001 a 003-002-0005000. Emisión bloqueada hasta confirmar con DNIT/contador el uso desde Neura, ya que la autorización identifica FLEX PDV como software.'
 )
 ON CONFLICT (empresa_id) DO UPDATE SET
   activo = EXCLUDED.activo,
