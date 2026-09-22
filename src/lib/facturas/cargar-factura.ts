@@ -124,6 +124,8 @@ export async function cargarFactura(
     timbrado_numero: config?.timbrado_numero ?? null,
     timbrado_inicio: config?.timbrado_inicio_vigencia ?? null,
     timbrado_fin: config?.timbrado_fin_vigencia ?? null,
+    establecimiento: config?.establecimiento_codigo ?? null,
+    punto_expedicion: config?.punto_expedicion_codigo ?? null,
   };
 
   return {
