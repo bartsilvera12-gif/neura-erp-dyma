@@ -1,28 +1,13 @@
 -- =============================================================================
--- DYMA ERP — Factura autoimpresor (media hoja, 8,5" x 5,5")
+-- DYMA ERP — Factura autoimpresor autorizada (modelo Neura A4)
 -- =============================================================================
 -- Ejecutar DESPUÉS de 13_venta_contado.sql.
 --
--- Hoy la factura se llena a mano sobre el talonario preimpreso. Autoimpresor es
--- lo contrario: el ERP imprime TODO sobre papel en blanco — membrete, timbrado,
--- número y detalle. Para eso hacen falta dos cosas que la base todavía no tiene:
+-- Configuración fiscal oficial según autorización DNIT FORM.350-1 N° 350010038781
+-- de fecha 21/09/2026. El timbrado entra en vigencia el 22/09/2026.
 --
---   1) Los datos del emisor y del timbrado, para poder imprimirlos.
---   2) Un registro de qué número le tocó a cada factura, porque el número
---      fiscal se asigna una sola vez y no se puede repetir ni reusar.
---
--- El punto 2 va en tabla propia y no en `facturas`: el número fiscal es un acto
--- de emisión con su propia fecha, su propio timbrado vigente y su propio corte
--- de IVA congelado. Si mañana se corrige el importe de la factura, lo emitido
--- sigue siendo lo que se le entregó al cliente.
---
--- `factura_autoimpresor` (que ya existe) NO sirve acá: cuelga de `ventas`, el
--- módulo POS que DYMA no usa. Esta tabla cuelga de `facturas`.
---
--- IMPORTANTE — el timbrado que se carga acá es el que figura en el talonario
--- preimpreso. Imprimir por autoimpresor requiere una autorización distinta de
--- la SET, con su propio número y su propio rango habilitado. Antes de emitir en
--- producción hay que reemplazar timbrado, vigencia y rango por los autorizados.
+-- La emisión fiscal y la impresión son actos separados: emitir asigna una sola
+-- vez el correlativo autorizado; reimprimir no consume otro número.
 --
 -- Todo vive dentro de `dymaerp`. No toca public, auth ni ningún otro schema.
 -- Idempotente.
@@ -53,21 +38,53 @@ INSERT INTO dymaerp.empresa_autoimpresor_config (
   tipo_documento_default, formato_impresion_default,
   observaciones
 )
-SELECT
+VALUES (
   '06255def-3835-4d37-8f7f-801af8043e8c', true,
   '80149103-7', 'CORPORACION DYMA S.A.', 'DYMA INMOBILIARIA',
   E'INVERSORES DE EMPRENDIMIENTOS INMOBILIARIOS\nACTIVIDADES INMOBILIARIAS REALIZADAS CON BIENES PROPIOS O ARRENDADOS',
-  E'Av. Monday a 150 metros de la Ruta 2 — Barrio San Juan\nJuan E. O''Leary - Alto Paraná - Paraguay',
-  '(0976) 606 960',
-  '18667879', DATE '2026-02-20', DATE '2027-02-28',
-  '001', '001',
-  1, 9999999, 0,
-  'factura', 'pdf_media_hoja',
-  'Timbrado tomado del talonario preimpreso. Reemplazar por el timbrado y rango autorizados para autoimpresor antes de emitir.'
-WHERE NOT EXISTS (
-  SELECT 1 FROM dymaerp.empresa_autoimpresor_config
-  WHERE empresa_id = '06255def-3835-4d37-8f7f-801af8043e8c'
-);
+  E'AV. LA RESIDENTA A UNA CUADRA Y MEDIA DE LA COMISARIA\nJUAN E. O''LEARY - ALTO PARANÁ - PARAGUAY',
+  '0976 606960',
+  '19139705', DATE '2026-09-22', DATE '2027-09-30',
+  '003', '002',
+  1, 5000, 1,
+  'factura', 'pdf_a4',
+  'Autoimpresor autorizado por DNIT — FORM.350-1 N° 350010038781, fecha 21/09/2026. Rango autorizado 003-002-0000001 a 003-002-0005000.'
+)
+ON CONFLICT (empresa_id) DO UPDATE SET
+  activo = EXCLUDED.activo,
+  ruc_emisor = EXCLUDED.ruc_emisor,
+  razon_social_emisor = EXCLUDED.razon_social_emisor,
+  nombre_fantasia = EXCLUDED.nombre_fantasia,
+  actividad_economica = EXCLUDED.actividad_economica,
+  direccion_matriz = EXCLUDED.direccion_matriz,
+  telefono = EXCLUDED.telefono,
+  timbrado_numero = EXCLUDED.timbrado_numero,
+  timbrado_inicio_vigencia = EXCLUDED.timbrado_inicio_vigencia,
+  timbrado_fin_vigencia = EXCLUDED.timbrado_fin_vigencia,
+  establecimiento_codigo = EXCLUDED.establecimiento_codigo,
+  punto_expedicion_codigo = EXCLUDED.punto_expedicion_codigo,
+  numero_inicial = EXCLUDED.numero_inicial,
+  numero_final = EXCLUDED.numero_final,
+  numero_actual = EXCLUDED.numero_actual,
+  tipo_documento_default = EXCLUDED.tipo_documento_default,
+  formato_impresion_default = EXCLUDED.formato_impresion_default,
+  observaciones = EXCLUDED.observaciones,
+  updated_at = now();
+
+-- El modo fiscal de DYMA queda en autoimpresor y el formato provisional es A4.
+INSERT INTO dymaerp.empresa_facturacion_modo (
+  empresa_id, modo, impresion_tipo_default, imprimir_al_confirmar,
+  preguntar_datos_al_confirmar, activo
+)
+VALUES (
+  '06255def-3835-4d37-8f7f-801af8043e8c',
+  'autoimpresor', 'pdf_a4', false, false, true
+)
+ON CONFLICT (empresa_id) DO UPDATE SET
+  modo = EXCLUDED.modo,
+  impresion_tipo_default = EXCLUDED.impresion_tipo_default,
+  activo = true,
+  updated_at = now();
 
 -- ---------------------------------------------------------------------------
 -- 2) El número fiscal de cada factura emitida
