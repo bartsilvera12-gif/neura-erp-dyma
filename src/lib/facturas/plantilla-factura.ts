@@ -2,17 +2,23 @@ import { guaraniesEnLetras } from "@/lib/contratos/numero-a-letras";
 import type { LineaImpresa, TotalesFactura } from "./factura-fiscal";
 
 /**
- * Factura autoimpresor DYMA — modelo provisional Neura, A4 vertical.
+ * Factura autoimpresor DYMA — 3 copias por hoja A4.
  *
- * La emisión fiscal y la impresión son actos separados. Esta plantilla no
- * asigna números: solo representa la factura con el número ya emitido.
+ * La clienta imprime en talonario continuo donde entran 3 comprobantes por hoja
+ * A4 (~9,6 cm de alto cada uno). Por eso las tres copias —Original, Duplicado y
+ * Triplicado de la MISMA factura— se apilan en una sola A4, en vez de una copia
+ * por hoja. La emisión fiscal y la impresión son actos separados: esta plantilla
+ * no asigna números, solo representa la factura con el número ya emitido.
  *
- * El diseño prioriza lectura y jerarquía visual, manteniendo los datos fiscales
- * exigidos para el autoimpresor: RUC, timbrado, vigencia, establecimiento,
- * punto de expedición, condición, desglose de IVA y total en letras.
+ * Cada copia mide ~95 mm (≈9,6 cm) de alto; las tres suman ~287 mm y entran en
+ * una hoja A4 (297 mm) al imprimir con márgenes en «Ninguno» (por eso el CSS usa
+ * `@page{margin:0}`). Se conservan los datos fiscales exigidos: RUC, timbrado,
+ * vigencia, establecimiento, punto de expedición, condición, desglose de IVA y
+ * total. Con muchos ítems se pagina a más hojas A4 (3 copias por hoja).
  */
 
-const RENGLONES_POR_PAGINA = 16;
+// Ítems que entran cómodos en el tercio de hoja. Con más, se pagina a otra A4.
+const RENGLONES_POR_TERCIO = 5;
 
 export interface EmisorFactura {
   razon_social: string;
@@ -49,11 +55,7 @@ export interface DatosFactura {
   totales: TotalesFactura;
 }
 
-const COPIAS = [
-  "ORIGINAL · CLIENTE",
-  "DUPLICADO · ARCHIVO TRIBUTARIO",
-  "TRIPLICADO · CONTABILIDAD",
-];
+const COPIAS = ["ORIGINAL", "DUPLICADO", "TRIPLICADO"];
 
 function esc(v: unknown): string {
   return String(v ?? "")
@@ -70,6 +72,12 @@ function escLineas(v: unknown): string {
 function fmtFecha(ymd: string | null): string {
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(ymd ?? "").slice(0, 10));
   return m ? `${m[3]}/${m[2]}/${m[1]}` : "";
+}
+
+/** dd/mm/aa, para los datos fiscales que van apretados. */
+function fmtFechaCorta(ymd: string | null): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(ymd ?? "").slice(0, 10));
+  return m ? `${m[3]}/${m[2]}/${m[1].slice(2)}` : "";
 }
 
 function num(n: number, moneda: string): string {
@@ -93,8 +101,8 @@ function enLetras(total: number, moneda: string): string {
 function paginar(lineas: LineaImpresa[]): LineaImpresa[][] {
   if (lineas.length === 0) return [[]];
   const paginas: LineaImpresa[][] = [];
-  for (let i = 0; i < lineas.length; i += RENGLONES_POR_PAGINA) {
-    paginas.push(lineas.slice(i, i + RENGLONES_POR_PAGINA));
+  for (let i = 0; i < lineas.length; i += RENGLONES_POR_TERCIO) {
+    paginas.push(lineas.slice(i, i + RENGLONES_POR_TERCIO));
   }
   return paginas;
 }
@@ -104,114 +112,69 @@ function filas(lineas: LineaImpresa[], moneda: string): string {
   return lineas
     .map(
       (l, i) => `<tr>
-        <td class="center">${i + 1}</td>
+        <td class="c">${i + 1}</td>
         <td class="desc">${esc(l.descripcion)}</td>
-        <td class="center">${esc(l.cantidad)}</td>
-        <td class="right">${prefijo} ${num(l.precio_unitario, moneda)}</td>
-        <td class="center">${l.tasa}%</td>
-        <td class="right strong">${prefijo} ${num(l.importe, moneda)}</td>
+        <td class="c">${esc(l.cantidad)}</td>
+        <td class="r">${prefijo} ${num(l.precio_unitario, moneda)}</td>
+        <td class="c">${l.tasa}%</td>
+        <td class="r b">${prefijo} ${num(l.importe, moneda)}</td>
       </tr>`
     )
     .join("");
 }
 
-function bloqueTotales(t: TotalesFactura, moneda: string): string {
-  const m = monedaLabel(moneda);
-  const totalIva = Number(t.iva_5 || 0) + Number(t.iva_10 || 0);
-  return `<div class="totales-wrap">
-    <div class="total-letras">
-      <div class="label">TOTAL A PAGAR EN LETRAS</div>
-      <div class="words">${esc(enLetras(t.total, moneda))}</div>
-      <div class="iva-resumen">
-        <span>IVA 5%: <strong>${m} ${num(t.iva_5, moneda)}</strong></span>
-        <span>IVA 10%: <strong>${m} ${num(t.iva_10, moneda)}</strong></span>
-        <span>Total IVA: <strong>${m} ${num(totalIva, moneda)}</strong></span>
-      </div>
-    </div>
-    <div class="totales">
-      <div><span>Exentas</span><strong>${m} ${num(t.exentas, moneda)}</strong></div>
-      <div><span>Gravadas 5%</span><strong>${m} ${num(t.gravado_5, moneda)}</strong></div>
-      <div><span>Gravadas 10%</span><strong>${m} ${num(t.gravado_10, moneda)}</strong></div>
-      <div class="gran-total"><span>TOTAL</span><strong>${m} ${num(t.total, moneda)}</strong></div>
-    </div>
-  </div>`;
-}
-
-function hoja(
+/**
+ * Un tercio de la A4: una copia completa de la factura, compacta.
+ */
+function copia(
   datos: DatosFactura,
-  copia: string,
+  etiqueta: string,
   lineas: LineaImpresa[],
   pagina: number,
   paginas: number
 ): string {
   const { emisor, cliente, totales, moneda } = datos;
+  const m = monedaLabel(moneda);
   const sinNumerar = !datos.numero;
   const ultima = pagina === paginas;
   const condicion = datos.condicion === "credito" ? "CRÉDITO" : "CONTADO";
+  const totalIva = Number(totales.iva_5 || 0) + Number(totales.iva_10 || 0);
 
-  return `<section class="hoja">
-    <header class="top">
-      <div class="brand">
+  return `<section class="copia">
+    <div class="cab">
+      <div class="marca">
         ${
           datos.logoUrl
             ? `<img class="logo" src="${esc(datos.logoUrl)}" alt="${esc(emisor.razon_social)}">`
-            : `<div class="logo-text">${esc(emisor.nombre_fantasia || emisor.razon_social)}</div>`
+            : `<div class="logo-txt">${esc(emisor.nombre_fantasia || emisor.razon_social)}</div>`
         }
-        <div class="emisor-name">${esc(emisor.razon_social)}</div>
-        ${emisor.actividad ? `<div class="muted activity">${escLineas(emisor.actividad)}</div>` : ""}
-        ${emisor.direccion ? `<div class="muted">${escLineas(emisor.direccion)}</div>` : ""}
-        ${emisor.telefono ? `<div class="muted">Tel.: ${esc(emisor.telefono)}</div>` : ""}
+        <div class="rs">${esc(emisor.razon_social)}</div>
+        ${emisor.actividad ? `<div class="act">${escLineas(emisor.actividad)}</div>` : ""}
+        ${emisor.direccion ? `<div class="dir">${escLineas(emisor.direccion)}</div>` : ""}
+        ${emisor.telefono ? `<div class="dir">Cel.: ${esc(emisor.telefono)}</div>` : ""}
       </div>
+      <div class="fisc">
+        <div class="fr"><span>Timbrado N°</span><b>${esc(emisor.timbrado_numero ?? "—")}</b></div>
+        <div class="fr"><span>Inicio vig.</span><b>${esc(fmtFechaCorta(emisor.timbrado_inicio)) || "—"}</b></div>
+        <div class="fr"><span>Válido hasta</span><b>${esc(fmtFechaCorta(emisor.timbrado_fin)) || "—"}</b></div>
+        <div class="fr"><span>RUC</span><b>${esc(emisor.ruc ?? "—")}</b></div>
+        <div class="titulo">FACTURA</div>
+        <div class="fnum${sinNumerar ? " sin" : ""}">N° ${esc(datos.numero ?? "SIN NUMERAR")}</div>
+        <div class="tag">${esc(etiqueta)}${paginas > 1 ? ` · ${pagina}/${paginas}` : ""}</div>
+      </div>
+    </div>
 
-      <div class="doc">
-        <div class="copy">${esc(copia)}${paginas > 1 ? ` · HOJA ${pagina}/${paginas}` : ""}</div>
-        <h1>FACTURA</h1>
-        <div class="numero${sinNumerar ? " sin-numero" : ""}">N° ${esc(datos.numero ?? "SIN NUMERAR")}</div>
-        <div class="fiscal">
-          <div><span>RUC</span><strong>${esc(emisor.ruc ?? "—")}</strong></div>
-          <div><span>Timbrado</span><strong>${esc(emisor.timbrado_numero ?? "—")}</strong></div>
-          <div><span>Vigencia</span><strong>${esc(fmtFecha(emisor.timbrado_inicio)) || "—"} al ${esc(fmtFecha(emisor.timbrado_fin)) || "—"}</strong></div>
-          <div><span>Est. / P. Exp.</span><strong>${esc(emisor.establecimiento ?? "—")} / ${esc(emisor.punto_expedicion ?? "—")}</strong></div>
-        </div>
-      </div>
-    </header>
-
-    <div class="rule"></div>
-
-    <section class="meta">
-      <div class="meta-left">
-        <div class="field"><span>Cliente</span><strong>${esc(cliente.nombre)}</strong></div>
-        <div class="field"><span>RUC / C.I.</span><strong>${esc(cliente.ruc ?? "—")}</strong></div>
-        <div class="field"><span>Dirección</span><strong>${esc(cliente.direccion ?? "—")}</strong></div>
-        ${cliente.telefono ? `<div class="field"><span>Teléfono</span><strong>${esc(cliente.telefono)}</strong></div>` : ""}
-      </div>
-      <div class="meta-right">
-        <div class="field"><span>Fecha de emisión</span><strong>${esc(fmtFecha(datos.fecha))}</strong></div>
-        <div class="field"><span>Condición de venta</span><strong>${condicion}</strong></div>
-        <div class="field"><span>Moneda</span><strong>${esc(moneda === "USD" ? "Dólares americanos" : "Guaraníes")}</strong></div>
-        ${cliente.observacion ? `<div class="field"><span>Observación</span><strong>${esc(cliente.observacion)}</strong></div>` : ""}
-      </div>
-    </section>
+    <div class="datos">
+      <div class="d1"><span>Fecha de emisión:</span> <b>${esc(fmtFecha(datos.fecha))}</b></div>
+      <div class="d2"><span>Cond. de venta:</span> <b>${condicion}</b></div>
+      <div class="d3"><span>Nombre o Razón Social:</span> <b>${esc(cliente.nombre)}</b></div>
+      <div class="d4"><span>RUC / C.I.:</span> <b>${esc(cliente.ruc ?? "—")}</b></div>
+      <div class="d5"><span>Dirección:</span> <b>${esc(cliente.direccion ?? "—")}</b></div>
+    </div>
 
     <table class="items">
-      <colgroup>
-        <col style="width:7%">
-        <col style="width:42%">
-        <col style="width:10%">
-        <col style="width:16%">
-        <col style="width:9%">
-        <col style="width:16%">
-      </colgroup>
-      <thead>
-        <tr>
-          <th>#</th>
-          <th>Descripción</th>
-          <th>Cant.</th>
-          <th>Precio unitario</th>
-          <th>IVA</th>
-          <th>Importe</th>
-        </tr>
-      </thead>
+      <colgroup><col style="width:6%"><col style="width:46%"><col style="width:8%"><col style="width:16%"><col style="width:8%"><col style="width:16%"></colgroup>
+      <thead><tr><th class="c">#</th><th>Descripción</th><th class="c">Cant.</th><th class="r">P. Unit.</th><th class="c">IVA</th><th class="r">Importe</th></tr></thead>
       <tbody>
         ${filas(lineas, moneda)}
         ${lineas.length === 0 ? `<tr><td colspan="6" class="empty">Sin ítems</td></tr>` : ""}
@@ -220,23 +183,31 @@ function hoja(
 
     ${
       ultima
-        ? bloqueTotales(totales, moneda)
-        : `<div class="continua">Continúa en la hoja ${pagina + 1} de ${paginas}. Los totales se muestran en la última hoja.</div>`
+        ? `<div class="pie">
+             <div class="letras"><span>Total en letras:</span> ${esc(enLetras(totales.total, moneda))}</div>
+             <div class="montos">
+               <div><span>Exentas</span><b>${m} ${num(totales.exentas, moneda)}</b></div>
+               <div><span>Grav. 5%</span><b>${m} ${num(totales.gravado_5, moneda)}</b></div>
+               <div><span>Grav. 10%</span><b>${m} ${num(totales.gravado_10, moneda)}</b></div>
+               <div><span>IVA</span><b>${m} ${num(totalIva, moneda)}</b></div>
+               <div class="gt"><span>TOTAL</span><b>${m} ${num(totales.total, moneda)}</b></div>
+             </div>
+           </div>`
+        : `<div class="continua">Continúa en la hoja ${pagina + 1}/${paginas} — totales en la última.</div>`
     }
-
-    <footer>
-      <div>Documento emitido por sistema autoimpresor autorizado.</div>
-      <div class="footer-copy">${esc(copia)}</div>
-    </footer>
+    <div class="etq">${esc(etiqueta)} · Documento emitido por sistema autoimpresor autorizado.</div>
   </section>`;
 }
 
 export function plantillaFactura(datos: DatosFactura, opciones?: { autoImprimir?: boolean }): string {
   const titulo = datos.numero ? `Factura ${datos.numero}` : "Factura sin numerar";
   const paginas = paginar(datos.lineas);
-  const hojas = COPIAS.map((copia) =>
-    paginas.map((ls, i) => hoja(datos, copia, ls, i + 1, paginas.length)).join("\n")
-  ).join("\n");
+  // Cada página de ítems es una hoja A4 con las 3 copias apiladas.
+  const hojas = paginas
+    .map(
+      (ls, i) => `<div class="a4">${COPIAS.map((et) => copia(datos, et, ls, i + 1, paginas.length)).join("")}</div>`
+    )
+    .join("\n");
 
   return `<!doctype html>
 <html lang="es">
@@ -247,73 +218,69 @@ export function plantillaFactura(datos: DatosFactura, opciones?: { autoImprimir?
 <style>
   *{box-sizing:border-box}
   html,body{margin:0;padding:0}
-  body{background:#eef1f4;color:#18212f;font-family:Arial,Helvetica,sans-serif;font-size:10.5pt;line-height:1.35}
-  .toolbar{width:210mm;margin:12px auto 0;display:flex;justify-content:flex-end}
+  body{background:#eef1f4;color:#18212f;font-family:Arial,Helvetica,sans-serif;line-height:1.2}
+  .toolbar{width:210mm;margin:10px auto 0;display:flex;justify-content:flex-end}
   .toolbar button{border:0;border-radius:8px;background:#166c74;color:#fff;padding:9px 18px;font-size:13px;font-weight:700;cursor:pointer}
-  .aviso{width:210mm;margin:8px auto 0;padding:10px 14px;border:1px solid #f1c76d;border-radius:8px;background:#fff7df;color:#6f5015;font-size:12px}
+  .aviso{width:210mm;margin:8px auto 0;padding:9px 14px;border:1px solid #f1c76d;border-radius:8px;background:#fff7df;color:#6f5015;font-size:12px}
 
-  .hoja{width:210mm;min-height:297mm;margin:12px auto;background:#fff;padding:17mm 16mm 14mm;display:flex;flex-direction:column;box-shadow:0 2px 18px rgba(15,23,42,.08);break-after:page}
-  .hoja:last-of-type{break-after:auto}
-  .top{display:flex;justify-content:space-between;gap:22mm;align-items:flex-start}
-  .brand{flex:1;min-width:0}
-  .logo{display:block;max-width:58mm;max-height:21mm;object-fit:contain;margin-bottom:5mm}
-  .logo-text{font-size:24pt;font-weight:800;letter-spacing:.02em;margin-bottom:4mm}
-  .emisor-name{font-weight:800;font-size:11pt;margin-bottom:2mm}
-  .muted{color:#637081;font-size:8.5pt;line-height:1.35}
-  .activity{font-weight:600;margin-bottom:1mm}
+  /* Una hoja A4 = 3 copias apiladas (~9,5 cm cada una). Alto automático apenas
+     menor que la A4 para que no desborde a una hoja en blanco al imprimir. */
+  .a4{width:210mm;margin:10px auto;background:#fff;box-shadow:0 2px 18px rgba(15,23,42,.08);
+      display:flex;flex-direction:column;padding:0.6mm 4mm}
+  .copia{height:95mm;overflow:hidden;display:flex;flex-direction:column;
+         border:1px solid #17323f;border-radius:2mm;padding:2.2mm 3mm;font-size:7.6pt}
+  .copia + .copia{margin-top:0.6mm}
 
-  .doc{width:76mm;text-align:right}
-  .copy{font-size:7.5pt;font-weight:700;letter-spacing:.07em;color:#6d7886;text-transform:uppercase;margin-bottom:2mm}
-  .doc h1{margin:0;color:#166c74;font-size:28pt;letter-spacing:.04em;line-height:1}
-  .numero{margin-top:2mm;font-size:13pt;font-weight:800;letter-spacing:.04em}
-  .sin-numero{color:#b42318}
-  .fiscal{margin-top:5mm;border:1px solid #d9e0e5;border-radius:8px;padding:3mm 4mm;text-align:left;background:#fafcfc}
-  .fiscal div{display:flex;justify-content:space-between;gap:5mm;padding:1.2mm 0;font-size:8.3pt;border-bottom:1px solid #edf1f3}
-  .fiscal div:last-child{border-bottom:0}
-  .fiscal span{color:#697684}
-  .fiscal strong{text-align:right;color:#1b2633}
+  .cab{display:flex;justify-content:space-between;gap:4mm;align-items:flex-start}
+  .marca{flex:1;min-width:0}
+  .logo{display:block;max-width:44mm;max-height:12mm;object-fit:contain;margin-bottom:1mm}
+  .logo-txt{font-size:15pt;font-weight:800;letter-spacing:.02em}
+  .rs{font-weight:800;font-size:8.6pt;color:#173a45}
+  .act{color:#4b5763;font-size:6.5pt;font-weight:600;line-height:1.15;margin-top:.4mm}
+  .dir{color:#5b6672;font-size:6.6pt;line-height:1.2}
+  .fisc{width:56mm;flex:none;border:1px solid #17323f;border-radius:1.6mm;padding:1.4mm 2mm;text-align:right}
+  .fr{display:flex;justify-content:space-between;gap:3mm;font-size:6.8pt;padding:.15mm 0}
+  .fr span{color:#5b6672}
+  .fr b{color:#132029}
+  .titulo{font-size:13pt;font-weight:800;color:#166c74;letter-spacing:.06em;margin-top:.8mm;text-align:center}
+  .fnum{font-size:9pt;font-weight:800;text-align:center;letter-spacing:.03em}
+  .fnum.sin{color:#b42318}
+  .tag{margin-top:.6mm;font-size:6.4pt;font-weight:800;letter-spacing:.08em;color:#6d7886;text-align:center;text-transform:uppercase}
 
-  .rule{height:2px;background:#166c74;margin:8mm 0 6mm}
-  .meta{display:grid;grid-template-columns:1.35fr 1fr;gap:18mm;margin-bottom:7mm}
-  .field{display:grid;grid-template-columns:31mm 1fr;gap:3mm;padding:1.5mm 0;border-bottom:1px solid #edf0f2}
-  .field span{color:#778290;font-size:8.6pt}
-  .field strong{font-size:9pt;font-weight:700;color:#222d3a;overflow-wrap:anywhere}
+  .datos{margin-top:1.6mm;display:grid;grid-template-columns:1fr 34mm;gap:.3mm 4mm;
+         border-top:1px solid #17323f;border-bottom:1px solid #cfd8dd;padding:1.2mm 0;font-size:7pt}
+  .datos span{color:#6a7581}
+  .datos b{color:#182430}
+  .datos .d1{grid-column:1} .datos .d2{grid-column:2;text-align:right}
+  .datos .d3,.datos .d4,.datos .d5{grid-column:1 / -1}
 
-  .items{width:100%;border-collapse:collapse;table-layout:fixed}
-  .items thead th{background:#166c74;color:#fff;padding:3.3mm 2.2mm;font-size:8.4pt;text-transform:uppercase;letter-spacing:.03em;text-align:left}
-  .items thead th:first-child{border-radius:6px 0 0 0}
-  .items thead th:last-child{border-radius:0 6px 0 0;text-align:right}
-  .items thead th:nth-child(1),.items thead th:nth-child(3),.items thead th:nth-child(5){text-align:center}
-  .items thead th:nth-child(4){text-align:right}
-  .items td{padding:3.2mm 2.2mm;border-bottom:1px solid #e8ecef;font-size:9pt;vertical-align:top}
-  .items .center{text-align:center}
-  .items .right{text-align:right}
-  .items .strong{font-weight:800}
+  .items{width:100%;border-collapse:collapse;table-layout:fixed;margin-top:1.4mm}
+  .items th{background:#166c74;color:#fff;padding:1mm 1.4mm;font-size:6.6pt;text-transform:uppercase;letter-spacing:.02em;text-align:left}
+  .items td{padding:.9mm 1.4mm;border-bottom:1px solid #e8ecef;font-size:7pt;vertical-align:top}
+  .items .c{text-align:center}
+  .items .r{text-align:right}
+  .items .b{font-weight:800}
   .items .desc{overflow-wrap:anywhere}
-  .items .empty{text-align:center;color:#8a95a2;padding:12mm}
+  .items .empty{text-align:center;color:#8a95a2;padding:4mm}
 
-  .totales-wrap{margin-top:auto;padding-top:8mm;display:grid;grid-template-columns:1fr 65mm;gap:14mm;align-items:start}
-  .total-letras{border-top:2px solid #166c74;padding-top:4mm}
-  .total-letras .label{font-size:7.5pt;font-weight:800;color:#62707e;letter-spacing:.05em}
-  .total-letras .words{font-size:10pt;font-weight:700;margin-top:2mm;text-transform:uppercase;line-height:1.45}
-  .iva-resumen{display:flex;flex-wrap:wrap;gap:3mm 8mm;margin-top:5mm;color:#697684;font-size:8.2pt}
-  .iva-resumen strong{color:#1d2835}
-  .totales{border:1px solid #dce2e6;border-radius:8px;overflow:hidden}
-  .totales>div{display:flex;justify-content:space-between;gap:5mm;padding:2.7mm 4mm;border-bottom:1px solid #e6eaed;font-size:9pt}
-  .totales>div:last-child{border-bottom:0}
-  .totales span{color:#667381}
-  .gran-total{background:#166c74;color:#fff!important;padding:4mm!important;font-size:12pt!important}
-  .gran-total span,.gran-total strong{color:#fff!important}
+  .pie{margin-top:auto;display:flex;justify-content:space-between;gap:4mm;align-items:flex-end;padding-top:1.4mm}
+  .letras{flex:1;font-size:6.8pt;color:#3a4652;line-height:1.25}
+  .letras span{color:#6a7581;font-weight:700}
+  .montos{flex:none;width:64mm;display:grid;grid-template-columns:1fr 1fr;gap:.4mm 3mm;font-size:6.8pt}
+  .montos>div{display:flex;justify-content:space-between;gap:2mm}
+  .montos span{color:#6a7581}
+  .montos .gt{grid-column:1 / -1;background:#166c74;color:#fff;border-radius:1mm;padding:.8mm 2mm;font-size:8pt;font-weight:800;margin-top:.6mm}
+  .montos .gt span,.montos .gt b{color:#fff}
 
-  .continua{margin-top:auto;padding:5mm;border:1px dashed #b8c2ca;border-radius:6px;text-align:center;color:#65717d;font-size:9pt}
-  footer{margin-top:10mm;padding-top:4mm;border-top:1px solid #e3e7ea;display:flex;justify-content:space-between;color:#7a8692;font-size:7.5pt}
-  .footer-copy{font-weight:700;text-transform:uppercase}
+  .continua{margin-top:auto;text-align:center;color:#65717d;font-size:6.6pt;border:1px dashed #b8c2ca;border-radius:1mm;padding:1.2mm}
+  .etq{margin-top:1mm;text-align:center;color:#8a95a2;font-size:5.8pt;letter-spacing:.03em}
 
   @media print{
     body{background:#fff}
     .toolbar,.aviso{display:none}
-    .hoja{margin:0;box-shadow:none;width:210mm;min-height:297mm;page-break-after:always}
-    .hoja:last-of-type{page-break-after:auto}
+    /* Salto SOLO entre hojas (no después de la última): evita la hoja en blanco. */
+    .a4{margin:0;box-shadow:none;width:210mm}
+    .a4 + .a4{page-break-before:always;break-before:page}
     @page{size:A4 portrait;margin:0}
   }
 </style>
