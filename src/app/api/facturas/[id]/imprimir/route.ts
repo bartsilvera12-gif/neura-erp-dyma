@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 /**
  * GET /api/facturas/[id]/imprimir?auto=1
  *
- * La factura lista para el papel, en media hoja (8,5" x 5,5") y por triplicado.
+ * Factura autoimpresor lista para imprimir en A4 vertical, usando el modelo visual provisional de Neura y generando los ejemplares fiscales configurados.
  *
  * Solo dibuja: el número fiscal se asigna en `POST .../emitir`. Si la factura
  * todavía no se emitió, sale rotulada "SIN NUMERAR" con el aviso arriba, así
