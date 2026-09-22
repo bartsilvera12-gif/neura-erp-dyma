@@ -2,31 +2,17 @@ import { guaraniesEnLetras } from "@/lib/contratos/numero-a-letras";
 import type { LineaImpresa, TotalesFactura } from "./factura-fiscal";
 
 /**
- * La factura de DYMA impresa por autoimpresor, en media hoja (8,5" x 5,5").
+ * Factura autoimpresor DYMA — modelo provisional Neura, A4 vertical.
  *
- * Reproduce el talonario preimpreso que hoy se llena a mano: mismo membrete,
- * misma caja de timbrado, misma grilla con las tres columnas de venta y la
- * liquidación del IVA abajo. La diferencia es que acá lo imprime el sistema
- * sobre papel en blanco, incluido el número.
+ * La emisión fiscal y la impresión son actos separados. Esta plantilla no
+ * asigna números: solo representa la factura con el número ya emitido.
  *
- * Se imprimen tres ejemplares, uno por hoja, cada uno rotulado en el margen
- * derecho: original al cliente, duplicado al archivo tributario y triplicado sin
- * valor para crédito fiscal.
- *
- * La grilla tiene una cantidad fija de renglones aunque sobren: el formulario en
- * papel se ve así y el vacío es lo que impide que alguien agregue una línea a
- * mano después de impresa.
- *
- * Si los ítems no entran en una hoja, la factura sigue en la siguiente con el
- * mismo número, y los totales van solo en la última. Antes el sobrante quedaba
- * recortado por el alto fijo de la media hoja: la línea desaparecía del papel
- * pero seguía sumando en el total, que es la peor forma de fallar que puede
- * tener un documento fiscal.
- *
- * Función pura: recibe datos y devuelve HTML.
+ * El diseño prioriza lectura y jerarquía visual, manteniendo los datos fiscales
+ * exigidos para el autoimpresor: RUC, timbrado, vigencia, establecimiento,
+ * punto de expedición, condición, desglose de IVA y total en letras.
  */
 
-const RENGLONES = 6;
+const RENGLONES_POR_PAGINA = 16;
 
 export interface EmisorFactura {
   razon_social: string;
@@ -38,6 +24,8 @@ export interface EmisorFactura {
   timbrado_numero: string | null;
   timbrado_inicio: string | null;
   timbrado_fin: string | null;
+  establecimiento: string | null;
+  punto_expedicion: string | null;
 }
 
 export interface ClienteFactura {
@@ -62,9 +50,9 @@ export interface DatosFactura {
 }
 
 const COPIAS = [
-  "ORIGINAL: CLIENTE",
-  "DUPLICADO: ARCHIVO TRIBUTARIO",
-  "TRIPLICADO: (NO VÁLIDO PARA CRÉDITO FISCAL)",
+  "ORIGINAL · CLIENTE",
+  "DUPLICADO · ARCHIVO TRIBUTARIO",
+  "TRIPLICADO · CONTABILIDAD",
 ];
 
 function esc(v: unknown): string {
@@ -75,7 +63,6 @@ function esc(v: unknown): string {
     .replace(/"/g, "&quot;");
 }
 
-/** Texto con saltos de línea reales, como la actividad económica o la dirección. */
 function escLineas(v: unknown): string {
   return esc(v).replace(/\r?\n/g, "<br>");
 }
@@ -85,11 +72,16 @@ function fmtFecha(ymd: string | null): string {
   return m ? `${m[3]}/${m[2]}/${m[1]}` : "";
 }
 
-/** Importes sin símbolo: la moneda ya está declarada en la cabecera. */
 function num(n: number, moneda: string): string {
   const v = Number(n) || 0;
-  if (v === 0) return "";
-  return moneda === "USD" ? v.toLocaleString("en-US", { minimumFractionDigits: 2 }) : Math.round(v).toLocaleString("es-PY");
+  if (moneda === "USD") {
+    return v.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  }
+  return Math.round(v).toLocaleString("es-PY");
+}
+
+function monedaLabel(moneda: string): string {
+  return moneda === "USD" ? "USD" : "Gs.";
 }
 
 function enLetras(total: number, moneda: string): string {
@@ -98,36 +90,51 @@ function enLetras(total: number, moneda: string): string {
   return `${palabras} ${moneda === "USD" ? "dólares americanos" : "guaraníes"}`;
 }
 
-function tilde(marcado: boolean): string {
-  return `<span class="box">${marcado ? "X" : "&nbsp;"}</span>`;
-}
-
-/** Los ítems repartidos en hojas de `RENGLONES` renglones. Siempre al menos una. */
 function paginar(lineas: LineaImpresa[]): LineaImpresa[][] {
   if (lineas.length === 0) return [[]];
   const paginas: LineaImpresa[][] = [];
-  for (let i = 0; i < lineas.length; i += RENGLONES) paginas.push(lineas.slice(i, i + RENGLONES));
+  for (let i = 0; i < lineas.length; i += RENGLONES_POR_PAGINA) {
+    paginas.push(lineas.slice(i, i + RENGLONES_POR_PAGINA));
+  }
   return paginas;
 }
 
 function filas(lineas: LineaImpresa[], moneda: string): string {
-  const html: string[] = [];
-  for (let i = 0; i < RENGLONES; i++) {
-    const l = lineas[i];
-    if (!l) {
-      html.push(`<tr class="vacia"><td></td><td></td><td></td><td></td><td></td><td></td></tr>`);
-      continue;
-    }
-    html.push(`<tr>
-      <td class="c">${esc(l.cantidad)}</td>
-      <td class="desc"><span>${esc(l.descripcion)}</span></td>
-      <td class="n">${num(l.precio_unitario, moneda)}</td>
-      <td class="n">${l.tasa === 0 ? num(l.importe, moneda) : ""}</td>
-      <td class="n">${l.tasa === 5 ? num(l.importe, moneda) : ""}</td>
-      <td class="n">${l.tasa === 10 ? num(l.importe, moneda) : ""}</td>
-    </tr>`);
-  }
-  return html.join("");
+  const prefijo = monedaLabel(moneda);
+  return lineas
+    .map(
+      (l, i) => `<tr>
+        <td class="center">${i + 1}</td>
+        <td class="desc">${esc(l.descripcion)}</td>
+        <td class="center">${esc(l.cantidad)}</td>
+        <td class="right">${prefijo} ${num(l.precio_unitario, moneda)}</td>
+        <td class="center">${l.tasa}%</td>
+        <td class="right strong">${prefijo} ${num(l.importe, moneda)}</td>
+      </tr>`
+    )
+    .join("");
+}
+
+function bloqueTotales(t: TotalesFactura, moneda: string): string {
+  const m = monedaLabel(moneda);
+  const totalIva = Number(t.iva_5 || 0) + Number(t.iva_10 || 0);
+  return `<div class="totales-wrap">
+    <div class="total-letras">
+      <div class="label">TOTAL A PAGAR EN LETRAS</div>
+      <div class="words">${esc(enLetras(t.total, moneda))}</div>
+      <div class="iva-resumen">
+        <span>IVA 5%: <strong>${m} ${num(t.iva_5, moneda)}</strong></span>
+        <span>IVA 10%: <strong>${m} ${num(t.iva_10, moneda)}</strong></span>
+        <span>Total IVA: <strong>${m} ${num(totalIva, moneda)}</strong></span>
+      </div>
+    </div>
+    <div class="totales">
+      <div><span>Exentas</span><strong>${m} ${num(t.exentas, moneda)}</strong></div>
+      <div><span>Gravadas 5%</span><strong>${m} ${num(t.gravado_5, moneda)}</strong></div>
+      <div><span>Gravadas 10%</span><strong>${m} ${num(t.gravado_10, moneda)}</strong></div>
+      <div class="gran-total"><span>TOTAL</span><strong>${m} ${num(t.total, moneda)}</strong></div>
+    </div>
+  </div>`;
 }
 
 function hoja(
@@ -140,221 +147,186 @@ function hoja(
   const { emisor, cliente, totales, moneda } = datos;
   const sinNumerar = !datos.numero;
   const ultima = pagina === paginas;
-  const rotulo = paginas > 1 ? `${copia} · Hoja ${pagina} de ${paginas}` : copia;
+  const condicion = datos.condicion === "credito" ? "CRÉDITO" : "CONTADO";
 
   return `<section class="hoja">
-  <div class="lateral">${esc(rotulo)}</div>
-  <div class="cuerpo">
-
-    <div class="cabecera">
-      <div class="emisor">
+    <header class="top">
+      <div class="brand">
         ${
           datos.logoUrl
             ? `<img class="logo" src="${esc(datos.logoUrl)}" alt="${esc(emisor.razon_social)}">`
-            : `<div class="logo-txt">${esc(emisor.nombre_fantasia || emisor.razon_social)}</div>`
+            : `<div class="logo-text">${esc(emisor.nombre_fantasia || emisor.razon_social)}</div>`
         }
-        <div class="razon">${esc(emisor.razon_social)}</div>
-        ${emisor.actividad ? `<div class="actividad">${escLineas(emisor.actividad)}</div>` : ""}
-        ${emisor.telefono ? `<div class="contacto">Cel.: ${esc(emisor.telefono)}</div>` : ""}
-        ${emisor.direccion ? `<div class="contacto">${escLineas(emisor.direccion)}</div>` : ""}
+        <div class="emisor-name">${esc(emisor.razon_social)}</div>
+        ${emisor.actividad ? `<div class="muted activity">${escLineas(emisor.actividad)}</div>` : ""}
+        ${emisor.direccion ? `<div class="muted">${escLineas(emisor.direccion)}</div>` : ""}
+        ${emisor.telefono ? `<div class="muted">Tel.: ${esc(emisor.telefono)}</div>` : ""}
       </div>
 
-      <div class="timbrado">
-        <div><strong>TIMBRADO N° ${esc(emisor.timbrado_numero ?? "—")}</strong></div>
-        <div>Fecha Inicio Vigencia: ${esc(fmtFecha(emisor.timbrado_inicio)) || "—"}</div>
-        <div>Válido hasta: ${esc(fmtFecha(emisor.timbrado_fin)) || "—"}</div>
-        <div class="ruc">RUC: ${esc(emisor.ruc ?? "—")}</div>
-        <div class="titulo">FACTURA</div>
+      <div class="doc">
+        <div class="copy">${esc(copia)}${paginas > 1 ? ` · HOJA ${pagina}/${paginas}` : ""}</div>
+        <h1>FACTURA</h1>
         <div class="numero${sinNumerar ? " sin-numero" : ""}">N° ${esc(datos.numero ?? "SIN NUMERAR")}</div>
+        <div class="fiscal">
+          <div><span>RUC</span><strong>${esc(emisor.ruc ?? "—")}</strong></div>
+          <div><span>Timbrado</span><strong>${esc(emisor.timbrado_numero ?? "—")}</strong></div>
+          <div><span>Vigencia</span><strong>${esc(fmtFecha(emisor.timbrado_inicio)) || "—"} al ${esc(fmtFecha(emisor.timbrado_fin)) || "—"}</strong></div>
+          <div><span>Est. / P. Exp.</span><strong>${esc(emisor.establecimiento ?? "—")} / ${esc(emisor.punto_expedicion ?? "—")}</strong></div>
+        </div>
       </div>
+    </header>
 
-      <div class="condicion">
-        <div>${tilde(datos.condicion === "contado")} <span>CONTADO</span></div>
-        <div>${tilde(datos.condicion === "credito")} <span>CRÉDITO</span></div>
+    <div class="rule"></div>
+
+    <section class="meta">
+      <div class="meta-left">
+        <div class="field"><span>Cliente</span><strong>${esc(cliente.nombre)}</strong></div>
+        <div class="field"><span>RUC / C.I.</span><strong>${esc(cliente.ruc ?? "—")}</strong></div>
+        <div class="field"><span>Dirección</span><strong>${esc(cliente.direccion ?? "—")}</strong></div>
+        ${cliente.telefono ? `<div class="field"><span>Teléfono</span><strong>${esc(cliente.telefono)}</strong></div>` : ""}
       </div>
-    </div>
+      <div class="meta-right">
+        <div class="field"><span>Fecha de emisión</span><strong>${esc(fmtFecha(datos.fecha))}</strong></div>
+        <div class="field"><span>Condición de venta</span><strong>${condicion}</strong></div>
+        <div class="field"><span>Moneda</span><strong>${esc(moneda === "USD" ? "Dólares americanos" : "Guaraníes")}</strong></div>
+        ${cliente.observacion ? `<div class="field"><span>Observación</span><strong>${esc(cliente.observacion)}</strong></div>` : ""}
+      </div>
+    </section>
 
-    <table class="receptor">
-      <tr>
-        <td class="k">Fecha de Emisión:</td><td class="v">${esc(fmtFecha(datos.fecha))}</td>
-        <td class="k">RUC / C.I.:</td><td class="v">${esc(cliente.ruc ?? "")}</td>
-      </tr>
-      <tr>
-        <td class="k">Señor(es):</td><td class="v">${esc(cliente.nombre)}</td>
-        <td class="k">Tel.:</td><td class="v">${esc(cliente.telefono ?? "")}</td>
-      </tr>
-      <tr>
-        <td class="k">Observación:</td><td class="v">${esc(cliente.observacion ?? "")}</td>
-        <td class="k">Dirección:</td><td class="v">${esc(cliente.direccion ?? "")}</td>
-      </tr>
-    </table>
-
-    <table class="detalle">
-      <!-- Los anchos van acá y no en los <th>: con table-layout fijo manda la
-           primera fila, y ahí las tres columnas de venta viven bajo un colspan.
-           Sin colgroup se repartían el espacio en partes iguales y la
-           descripción quedaba en un tercio de lo que le corresponde. -->
+    <table class="items">
       <colgroup>
-        <col style="width:.62in"><col><col style="width:.95in">
-        <col style="width:.95in"><col style="width:.95in"><col style="width:1.05in">
+        <col style="width:7%">
+        <col style="width:42%">
+        <col style="width:10%">
+        <col style="width:16%">
+        <col style="width:9%">
+        <col style="width:16%">
       </colgroup>
       <thead>
         <tr>
-          <th rowspan="2">Cantidad</th>
-          <th rowspan="2">Clase de mercaderías y/o servicios</th>
-          <th rowspan="2">Precio<br>Unitario</th>
-          <th colspan="3" class="ventas">V E N T A S</th>
-        </tr>
-        <tr>
-          <th>Exentas</th>
-          <th>5%</th>
-          <th>10%</th>
+          <th>#</th>
+          <th>Descripción</th>
+          <th>Cant.</th>
+          <th>Precio unitario</th>
+          <th>IVA</th>
+          <th>Importe</th>
         </tr>
       </thead>
-      <tbody>${filas(lineas, moneda)}</tbody>
-      <tfoot>
-        ${
-          ultima
-            ? `<tr>
-          <td colspan="2" rowspan="2" class="letras">
-            <span class="rot">TOTAL A PAGAR (en letras)</span>
-            <span class="valor">${esc(enLetras(totales.total, moneda))}</span>
-          </td>
-          <td class="rot">SUB TOTALES</td>
-          <td class="n">${num(totales.exentas, moneda)}</td>
-          <td class="n">${num(totales.gravado_5, moneda)}</td>
-          <td class="n">${num(totales.gravado_10, moneda)}</td>
-        </tr>
-        <tr>
-          <td class="rot total">TOTAL</td>
-          <td colspan="3" class="n total">${num(totales.total, moneda)}</td>
-        </tr>`
-            : `<tr>
-          <td colspan="6" class="rot sigue">CONTINÚA EN LA HOJA ${pagina + 1} DE ${paginas} — LOS TOTALES VAN EN LA ÚLTIMA</td>
-        </tr>`
-        }
-      </tfoot>
+      <tbody>
+        ${filas(lineas, moneda)}
+        ${lineas.length === 0 ? `<tr><td colspan="6" class="empty">Sin ítems</td></tr>` : ""}
+      </tbody>
     </table>
 
-    <div class="liquidacion">
-      ${
-        ultima
-          ? `Liquidación del IVA: (5%) <u>&nbsp;${num(totales.iva_5, moneda) || "&nbsp;".repeat(8)}&nbsp;</u>
-      &nbsp;&nbsp;(10%) <u>&nbsp;${num(totales.iva_10, moneda) || "&nbsp;".repeat(8)}&nbsp;</u>
-      &nbsp;&nbsp;TOTAL: <u>&nbsp;${num(totales.iva_5 + totales.iva_10, moneda) || "&nbsp;".repeat(8)}&nbsp;</u>`
-          : `Liquidación del IVA: se detalla en la hoja ${paginas} de ${paginas}.`
-      }
-    </div>
+    ${
+      ultima
+        ? bloqueTotales(totales, moneda)
+        : `<div class="continua">Continúa en la hoja ${pagina + 1} de ${paginas}. Los totales se muestran en la última hoja.</div>`
+    }
 
-    <p class="mora">La falta de pago de esta factura a su vencimiento devengará un interés del ____ % mensual.
-    El simple vencimiento establecerá la mora, autorizando la consulta como la inclusión a la Base de datos de
-    Informaciones Comerciales, conforme a lo establecido en la ley 1682, como también para que se pueda proveer
-    información a terceros interesados.</p>
-
-    <div class="firmas">
-      <div>C.I. N°: ______________________</div>
-      <div>Firma: ______________________</div>
-      <div>Aclaración de Firma: ______________________</div>
-    </div>
-
-  </div>
-</section>`;
+    <footer>
+      <div>Documento emitido por sistema autoimpresor autorizado.</div>
+      <div class="footer-copy">${esc(copia)}</div>
+    </footer>
+  </section>`;
 }
 
 export function plantillaFactura(datos: DatosFactura, opciones?: { autoImprimir?: boolean }): string {
   const titulo = datos.numero ? `Factura ${datos.numero}` : "Factura sin numerar";
+  const paginas = paginar(datos.lineas);
+  const hojas = COPIAS.map((copia) =>
+    paginas.map((ls, i) => hoja(datos, copia, ls, i + 1, paginas.length)).join("\n")
+  ).join("\n");
 
   return `<!doctype html>
-<html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>${esc(titulo)}</title>
 <style>
-  *{box-sizing:border-box} html,body{margin:0;padding:0}
-  body{background:#e5e7eb;font-family:Arial,Helvetica,sans-serif;color:#000;font-size:7.5pt;line-height:1.2}
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{background:#eef1f4;color:#18212f;font-family:Arial,Helvetica,sans-serif;font-size:10.5pt;line-height:1.35}
+  .toolbar{width:210mm;margin:12px auto 0;display:flex;justify-content:flex-end}
+  .toolbar button{border:0;border-radius:8px;background:#166c74;color:#fff;padding:9px 18px;font-size:13px;font-weight:700;cursor:pointer}
+  .aviso{width:210mm;margin:8px auto 0;padding:10px 14px;border:1px solid #f1c76d;border-radius:8px;background:#fff7df;color:#6f5015;font-size:12px}
 
-  /* Media hoja apaisada: 8,5" de ancho por 5,5" de alto. */
-  .hoja{width:8.5in;height:5.5in;background:#fff;margin:10px auto;padding:.18in;display:flex;gap:.06in;overflow:hidden}
-  .cuerpo{flex:1;display:flex;flex-direction:column;min-width:0}
+  .hoja{width:210mm;min-height:297mm;margin:12px auto;background:#fff;padding:17mm 16mm 14mm;display:flex;flex-direction:column;box-shadow:0 2px 18px rgba(15,23,42,.08);break-after:page}
+  .hoja:last-of-type{break-after:auto}
+  .top{display:flex;justify-content:space-between;gap:22mm;align-items:flex-start}
+  .brand{flex:1;min-width:0}
+  .logo{display:block;max-width:58mm;max-height:21mm;object-fit:contain;margin-bottom:5mm}
+  .logo-text{font-size:24pt;font-weight:800;letter-spacing:.02em;margin-bottom:4mm}
+  .emisor-name{font-weight:800;font-size:11pt;margin-bottom:2mm}
+  .muted{color:#637081;font-size:8.5pt;line-height:1.35}
+  .activity{font-weight:600;margin-bottom:1mm}
 
-  /* El rótulo del ejemplar, en vertical contra el margen derecho. */
-  .lateral{order:2;width:.16in;font-size:5.2pt;letter-spacing:.04em;font-weight:700;
-    writing-mode:vertical-rl;text-orientation:mixed;transform:rotate(180deg);
-    display:flex;align-items:center;justify-content:center;white-space:nowrap;color:#111}
+  .doc{width:76mm;text-align:right}
+  .copy{font-size:7.5pt;font-weight:700;letter-spacing:.07em;color:#6d7886;text-transform:uppercase;margin-bottom:2mm}
+  .doc h1{margin:0;color:#166c74;font-size:28pt;letter-spacing:.04em;line-height:1}
+  .numero{margin-top:2mm;font-size:13pt;font-weight:800;letter-spacing:.04em}
+  .sin-numero{color:#b42318}
+  .fiscal{margin-top:5mm;border:1px solid #d9e0e5;border-radius:8px;padding:3mm 4mm;text-align:left;background:#fafcfc}
+  .fiscal div{display:flex;justify-content:space-between;gap:5mm;padding:1.2mm 0;font-size:8.3pt;border-bottom:1px solid #edf1f3}
+  .fiscal div:last-child{border-bottom:0}
+  .fiscal span{color:#697684}
+  .fiscal strong{text-align:right;color:#1b2633}
 
-  .cabecera{display:flex;border:1.2px solid #000;min-height:.86in}
-  .emisor{flex:1.55;padding:3px 6px;border-right:1.2px solid #000;min-width:0}
-  /* Del tamaño que tiene en el talonario. Con tope de alto y de ancho, y sin
-     deformar, porque el logo lo repone el cliente y puede venir apaisado o
-     cuadrado: así entra siempre sin empujar el resto de la cabecera. */
-  .emisor .logo{max-height:.46in;max-width:2.1in;object-fit:contain;display:block;margin-bottom:1px}
-  .emisor .logo-txt{font-size:13pt;font-weight:800;letter-spacing:.02em}
-  .emisor .razon{font-size:8.5pt;font-weight:800}
-  .emisor .actividad{font-size:6pt;font-weight:700;margin-top:1px}
-  .emisor .contacto{font-size:6pt;margin-top:1px}
+  .rule{height:2px;background:#166c74;margin:8mm 0 6mm}
+  .meta{display:grid;grid-template-columns:1.35fr 1fr;gap:18mm;margin-bottom:7mm}
+  .field{display:grid;grid-template-columns:31mm 1fr;gap:3mm;padding:1.5mm 0;border-bottom:1px solid #edf0f2}
+  .field span{color:#778290;font-size:8.6pt}
+  .field strong{font-size:9pt;font-weight:700;color:#222d3a;overflow-wrap:anywhere}
 
-  .timbrado{flex:1;padding:3px 6px;border-right:1.2px solid #000;text-align:center;font-size:7pt}
-  .timbrado .ruc{font-weight:800;font-style:italic;margin-top:1px}
-  .timbrado .titulo{font-size:12pt;font-weight:800;font-style:italic;letter-spacing:.02em}
-  .timbrado .numero{font-size:9.5pt;font-weight:800}
-  .timbrado .sin-numero{color:#b91c1c}
+  .items{width:100%;border-collapse:collapse;table-layout:fixed}
+  .items thead th{background:#166c74;color:#fff;padding:3.3mm 2.2mm;font-size:8.4pt;text-transform:uppercase;letter-spacing:.03em;text-align:left}
+  .items thead th:first-child{border-radius:6px 0 0 0}
+  .items thead th:last-child{border-radius:0 6px 0 0;text-align:right}
+  .items thead th:nth-child(1),.items thead th:nth-child(3),.items thead th:nth-child(5){text-align:center}
+  .items thead th:nth-child(4){text-align:right}
+  .items td{padding:3.2mm 2.2mm;border-bottom:1px solid #e8ecef;font-size:9pt;vertical-align:top}
+  .items .center{text-align:center}
+  .items .right{text-align:right}
+  .items .strong{font-weight:800}
+  .items .desc{overflow-wrap:anywhere}
+  .items .empty{text-align:center;color:#8a95a2;padding:12mm}
 
-  .condicion{width:1.25in;padding:6px;display:flex;flex-direction:column;justify-content:center;gap:9px;font-size:9pt;font-weight:700}
-  .condicion div{display:flex;align-items:center;gap:5px}
-  .box{display:inline-block;width:13px;height:13px;border:1.2px solid #000;text-align:center;line-height:11px;font-size:9pt;font-weight:800}
+  .totales-wrap{margin-top:auto;padding-top:8mm;display:grid;grid-template-columns:1fr 65mm;gap:14mm;align-items:start}
+  .total-letras{border-top:2px solid #166c74;padding-top:4mm}
+  .total-letras .label{font-size:7.5pt;font-weight:800;color:#62707e;letter-spacing:.05em}
+  .total-letras .words{font-size:10pt;font-weight:700;margin-top:2mm;text-transform:uppercase;line-height:1.45}
+  .iva-resumen{display:flex;flex-wrap:wrap;gap:3mm 8mm;margin-top:5mm;color:#697684;font-size:8.2pt}
+  .iva-resumen strong{color:#1d2835}
+  .totales{border:1px solid #dce2e6;border-radius:8px;overflow:hidden}
+  .totales>div{display:flex;justify-content:space-between;gap:5mm;padding:2.7mm 4mm;border-bottom:1px solid #e6eaed;font-size:9pt}
+  .totales>div:last-child{border-bottom:0}
+  .totales span{color:#667381}
+  .gran-total{background:#166c74;color:#fff!important;padding:4mm!important;font-size:12pt!important}
+  .gran-total span,.gran-total strong{color:#fff!important}
 
-  .receptor{width:100%;border-collapse:collapse;border:1.2px solid #000;border-top:0;table-layout:fixed}
-  .receptor td{border:.6px solid #000;padding:2px 5px;height:.19in;font-size:7.5pt}
-  .receptor .k{width:1.05in;font-weight:600;border-right:0}
-  .receptor .v{border-left:0}
-
-  .detalle{width:100%;border-collapse:collapse;border:1.2px solid #000;border-top:0;table-layout:fixed;flex:1}
-  .detalle th,.detalle td{border:.6px solid #000;padding:1px 4px;font-size:7.5pt;vertical-align:top}
-  .detalle th{text-align:center;font-weight:700;font-size:7pt;background:#fff}
-  .detalle .ventas{letter-spacing:.28em;font-weight:800}
-  .detalle td.c{text-align:center} .detalle td.n{text-align:right}
-  /* Todos los renglones miden lo mismo. Si la altura se pone solo en los
-     vacíos, el sobrante de la grilla se lo lleva entero la fila con texto y
-     queda un primer renglón enorme sobre cinco chiquitos. */
-  .detalle tbody td{height:.27in}
-  /* Dos líneas como máximo: una descripción larguísima no puede empujar el
-     renglón siguiente fuera de la media hoja. */
-  /* El recorte va en el span y no en la celda: un td no puede ser -webkit-box
-     (el navegador lo pasa a flow-root) y el limite de lineas no se aplicaba. */
-  .detalle .desc{overflow:hidden}
-  .detalle .desc span{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;word-break:break-word}
-  .detalle .sigue{font-style:italic;letter-spacing:.04em}
-  .detalle tfoot td{height:.22in;font-weight:700}
-  .detalle .rot{font-size:7pt;font-weight:700;text-align:center}
-  .detalle .letras{vertical-align:top}
-  .detalle .letras .rot{display:block;text-align:left;font-size:6.5pt}
-  .detalle .letras .valor{display:block;font-weight:400;font-size:7.5pt;margin-top:1px}
-  .detalle .total{font-size:9pt;font-weight:800}
-
-  .liquidacion{border:1.2px solid #000;border-top:0;padding:2px 5px;font-size:7pt;font-weight:600}
-  .mora{margin:2px 0 0;font-size:5.6pt;line-height:1.25;text-align:justify}
-  .firmas{display:flex;justify-content:space-between;gap:10px;margin-top:auto;padding-top:4px;font-size:6.5pt}
-
-  .toolbar{max-width:8.5in;margin:10px auto 0;text-align:right}
-  .toolbar button{font-size:13px;padding:8px 16px;border-radius:8px;border:1px solid #0EA5E9;background:#0EA5E9;color:#fff;cursor:pointer;font-family:inherit}
-  .aviso{max-width:8.5in;margin:8px auto 0;padding:8px 12px;border-radius:8px;background:#fef3c7;border:1px solid #fbbf24;font-size:11px;line-height:1.4}
+  .continua{margin-top:auto;padding:5mm;border:1px dashed #b8c2ca;border-radius:6px;text-align:center;color:#65717d;font-size:9pt}
+  footer{margin-top:10mm;padding-top:4mm;border-top:1px solid #e3e7ea;display:flex;justify-content:space-between;color:#7a8692;font-size:7.5pt}
+  .footer-copy{font-weight:700;text-transform:uppercase}
 
   @media print{
     body{background:#fff}
     .toolbar,.aviso{display:none}
-    .hoja{margin:0;box-shadow:none;break-after:page}
-    .hoja:last-of-type{break-after:auto}
-    @page{size:8.5in 5.5in;margin:0}
+    .hoja{margin:0;box-shadow:none;width:210mm;min-height:297mm;page-break-after:always}
+    .hoja:last-of-type{page-break-after:auto}
+    @page{size:A4 portrait;margin:0}
   }
-</style></head><body>
+</style>
+</head>
+<body>
 <div class="toolbar"><button onclick="window.print()">Imprimir factura</button></div>
 ${
   datos.numero
     ? ""
-    : `<div class="aviso"><strong>Todavía sin numerar.</strong> Esta hoja es una vista previa: no lleva número fiscal y no se puede entregar al cliente. Volvé a la factura y usá <em>Emitir e imprimir</em> para asignarle el número del timbrado.</div>`
+    : `<div class="aviso"><strong>Vista previa sin numerar.</strong> Esta factura todavía no tiene número fiscal. Para emitirla, volvé al detalle y usá <em>Emitir e imprimir</em>.</div>`
 }
-${(() => {
-  const paginas = paginar(datos.lineas);
-  return COPIAS.map((c) => paginas.map((ls, i) => hoja(datos, c, ls, i + 1, paginas.length)).join("\n")).join("\n");
-})()}
-<script>try{ if (${opciones?.autoImprimir ? "true" : "false"}) window.print(); }catch(e){}</script>
-</body></html>`;
+${hojas}
+<script>try{if(${opciones?.autoImprimir ? "true" : "false"}) window.print()}catch(e){}</script>
+</body>
+</html>`;
 }
