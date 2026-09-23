@@ -164,16 +164,16 @@ export function plantillaCompraventaPlazos(datos: DatosContrato, opciones?: { au
 <title>${esc(operacion.numero_contrato)} — Contrato de compraventa</title>
 <style>
   *{box-sizing:border-box} html,body{margin:0;padding:0}
-  body{font-family:"Times New Roman",Georgia,serif;color:#111827;background:#f3f4f6;font-size:12pt;line-height:1.5}
-  .page{width:210mm;margin:0 auto;background:#fff;padding:20mm 22mm}
-  h1{font-size:15pt;text-align:center;letter-spacing:.02em;margin:0 0 4px}
-  .contrato-num{text-align:center;font-size:10pt;color:#6b7280;margin-bottom:18px}
-  h3{font-size:12pt;margin:18px 0 6px;text-transform:uppercase;letter-spacing:.01em}
-  p{margin:0 0 10px;text-align:justify}
-  table.datos{width:100%;border-collapse:collapse;margin:12px 0 6px;font-size:10pt}
-  table.datos th,table.datos td{border:1px solid #9ca3af;padding:5px 7px;text-align:left;vertical-align:top}
+  body{font-family:"Times New Roman",Georgia,serif;color:#111827;background:#f3f4f6;font-size:9.5pt;line-height:1.22}
+  .page{width:210mm;margin:0 auto;background:#fff;padding:14mm 18mm}
+  h1{font-size:12.5pt;text-align:center;letter-spacing:.02em;margin:0 0 3px}
+  .contrato-num{text-align:center;font-size:8.5pt;color:#6b7280;margin-bottom:10px}
+  h3{font-size:9.5pt;margin:9px 0 3px;text-transform:uppercase;letter-spacing:.01em}
+  p{margin:0 0 5px;text-align:justify}
+  table.datos{width:100%;border-collapse:collapse;margin:8px 0 4px;font-size:9pt}
+  table.datos th,table.datos td{border:1px solid #9ca3af;padding:3px 6px;text-align:left;vertical-align:top}
   table.datos th{background:#f3f4f6;font-weight:700;width:26%;white-space:nowrap}
-  .firmas{display:flex;flex-wrap:wrap;gap:28px;margin-top:44px}
+  .firmas{display:flex;flex-wrap:wrap;gap:24px;margin-top:30px}
   .firma{flex:1 1 40%;min-width:200px;text-align:center}
   .firma .linea{border-top:1px solid #111827;margin-bottom:6px}
   .firma .rol{font-size:9.5pt;font-weight:700}
@@ -204,7 +204,7 @@ export function plantillaCompraventaPlazos(datos: DatosContrato, opciones?: { au
     /* El título y la primera fila no se separan del salto. */
     .anexo h3{break-after:avoid;page-break-after:avoid}
     thead{display:table-header-group}
-    @page{size:A4;margin:18mm}
+    @page{size:A4;margin:14mm}
   }
 </style></head><body>
 <div class="toolbar"><button onclick="window.print()">Imprimir / Guardar PDF</button></div>
