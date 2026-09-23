@@ -3,7 +3,7 @@ import { requireLotesModuleAccess } from "@/lib/lotes/lotes-auth";
 import { errorResponse, successResponse } from "@/lib/api/response";
 import { calcularMoraCuota } from "@/lib/financiacion/plan-cuotas";
 import { hoyAsuncion } from "@/lib/reportes/calculo";
-import { emitirFacturaSimple } from "@/lib/facturacion/emitir-factura-simple";
+import { emitirFacturaSimple, type LineaFacturaSimple } from "@/lib/facturacion/emitir-factura-simple";
 import { getFacturasServiceClientForEmpresa } from "@/lib/facturacion/facturas-service-client";
 import { emitEvent, EVENT_TYPES } from "@/lib/integrations/events";
 import { toCalendarDateStr } from "@/lib/fechas/calendario";
@@ -118,15 +118,25 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
 
     if (!facturaId) {
       const detalle = `Contrato ${String(v.numero_contrato)} — cuota ${Number(c.numero)} · vence ${String(c.vencimiento)}`;
+      // IVA de la cuota de lote: se desglosa 70% exento + 30% gravado al 5% (regla
+      // fiscal de DYMA para venta de loteamientos). La limpieza NO usa este 70/30.
+      const totalCuota = Number(c.total ?? 0);
+      const exento = Math.round(totalCuota * 0.7);
+      const gravado5 = totalCuota - exento;
+      const lineasCuota: LineaFacturaSimple[] = [
+        { descripcion: `${detalle} — 70% exento`, total: exento, tasa: 0 as const },
+        { descripcion: `${detalle} — 30% gravado IVA 5%`, total: gravado5, tasa: 5 as const },
+      ].filter((l) => l.total > 0);
       const factura = await emitirFacturaSimple(sbFact, {
         empresaId,
         clienteId: String(v.cliente_id),
         fecha: fechaPago,
-        importe: Number(c.total ?? 0),
+        importe: totalCuota,
         moneda: v.moneda === "USD" ? "USD" : "GS",
         // Contado: la cuota se factura en el momento del cobro, ya vencida.
         tipo: "contado",
         descripcion: detalle,
+        lineas: lineasCuota,
       });
       facturaId = factura.id;
 

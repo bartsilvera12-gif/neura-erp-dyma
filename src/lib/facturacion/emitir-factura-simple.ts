@@ -1,6 +1,18 @@
 import "server-only";
 import { fechaMasDiasCalendario } from "@/lib/fechas/calendario";
-import { montosFacturaItemParaInsert, tasaIvaDesdeIvaTipo } from "@/lib/facturacion/factura-item-montos";
+import {
+  montosFacturaItemParaInsert,
+  tasaIvaDesdeIvaTipo,
+  type TasaIvaItem,
+} from "@/lib/facturacion/factura-item-montos";
+
+/** Una línea de factura con su tasa, para facturas de varios renglones (p.ej. el 70/30 de la cuota de lote). */
+export interface LineaFacturaSimple {
+  descripcion: string;
+  /** Total de la línea con IVA incluido. */
+  total: number;
+  tasa: TasaIvaItem;
+}
 import { obtenerSiguienteNumeroFacturaEmpresa } from "@/lib/facturacion/factura-suscripcion-servidor";
 import type { AppSupabaseClient } from "@/lib/supabase/schema";
 export type MonedaFactura = "GS" | "USD";
@@ -26,6 +38,12 @@ export async function emitirFacturaSimple(
     tipo: TipoFacturaSimple;
     ivaTipo?: string;
     descripcion: string;
+    /**
+     * Desglose en varias líneas (suma = importe). Si se pasa, la factura sale con
+     * un renglón por línea, cada uno con su tasa; si no, sale la línea única con
+     * `descripcion`/`ivaTipo`. Lo usa la cuota de lote para el 70% exento + 30% al 5%.
+     */
+    lineas?: LineaFacturaSimple[];
   }
 ): Promise<{ id: string; numero_factura: string; fecha_vencimiento: string }> {
   // Contado vence el mismo día; crédito sigue el default de la instancia.
@@ -60,24 +78,33 @@ export async function emitirFacturaSimple(
     throw new Error(error?.message ?? "No se pudo emitir la factura del servicio");
   }
 
-  const linea = montosFacturaItemParaInsert({
-    totalLinea: input.importe,
-    moneda: input.moneda,
-    cantidad: 1,
-    precioUnitario: input.importe,
-    tasaIva: tasaIvaDesdeIvaTipo(input.ivaTipo),
+  // Una sola línea, o varias si se pasó `lineas` (p.ej. el 70/30 de la cuota).
+  const desglose: LineaFacturaSimple[] =
+    input.lineas && input.lineas.length > 0
+      ? input.lineas
+      : [{ descripcion: input.descripcion, total: input.importe, tasa: tasaIvaDesdeIvaTipo(input.ivaTipo) }];
+
+  const items = desglose.map((l) => {
+    const montos = montosFacturaItemParaInsert({
+      totalLinea: l.total,
+      moneda: input.moneda,
+      cantidad: 1,
+      precioUnitario: l.total,
+      tasaIva: l.tasa,
+    });
+    return {
+      factura_id: data.id,
+      empresa_id: input.empresaId,
+      descripcion: l.descripcion,
+      cantidad: 1,
+      precio_unitario: montos.precio_unitario,
+      subtotal: montos.subtotal,
+      iva: montos.iva,
+      total: montos.total,
+    };
   });
 
-  const { error: errItem } = await supabase.from("factura_items").insert({
-    factura_id: data.id,
-    empresa_id: input.empresaId,
-    descripcion: input.descripcion,
-    cantidad: 1,
-    precio_unitario: linea.precio_unitario,
-    subtotal: linea.subtotal,
-    iva: linea.iva,
-    total: linea.total,
-  });
+  const { error: errItem } = await supabase.from("factura_items").insert(items);
 
   if (errItem) {
     // Sin ítem la factura queda inconsistente: se deshace la cabecera.
