@@ -56,7 +56,11 @@ export interface DatosFactura {
   totales: TotalesFactura;
 }
 
-const COPIAS = ["ORIGINAL", "COPIA"];
+// Factura triplicada: original para el cliente, y dos copias fiscales. Se
+// imprimen 2 copias por hoja A4; con tres copias, la tercera queda sola en la
+// segunda hoja (ver `plantillaFactura`).
+const COPIAS = ["ORIGINAL", "DUPLICADO · CONTABILIDAD", "TRIPLICADO · ARCHIVO TRIBUTARIO"];
+const COPIAS_POR_HOJA = 2;
 
 function esc(v: unknown): string {
   return String(v ?? "")
@@ -203,11 +207,22 @@ function copia(
 export function plantillaFactura(datos: DatosFactura, opciones?: { autoImprimir?: boolean }): string {
   const titulo = datos.numero ? `Factura ${datos.numero}` : "Factura sin numerar";
   const paginas = paginar(datos.lineas);
-  // Cada página de ítems es una hoja A4 con las 3 copias apiladas.
+  // Se imprimen 2 copias por hoja A4. Con las 3 copias fiscales, la primera hoja
+  // lleva Original + Duplicado y la segunda queda con el Triplicado solo. Se
+  // agrupan en tandas de COPIAS_POR_HOJA por cada página de ítems.
   const hojas = paginas
-    .map(
-      (ls, i) => `<div class="a4">${COPIAS.map((et) => copia(datos, et, ls, i + 1, paginas.length)).join("")}</div>`
-    )
+    .map((ls, i) => {
+      const tandas: string[][] = [];
+      for (let k = 0; k < COPIAS.length; k += COPIAS_POR_HOJA) {
+        tandas.push(COPIAS.slice(k, k + COPIAS_POR_HOJA));
+      }
+      return tandas
+        .map(
+          (tanda) =>
+            `<div class="a4">${tanda.map((et) => copia(datos, et, ls, i + 1, paginas.length)).join("")}</div>`
+        )
+        .join("\n");
+    })
     .join("\n");
 
   return `<!doctype html>
