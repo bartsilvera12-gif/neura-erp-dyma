@@ -2,23 +2,24 @@ import { guaraniesEnLetras } from "@/lib/contratos/numero-a-letras";
 import type { LineaImpresa, TotalesFactura } from "./factura-fiscal";
 
 /**
- * Factura autoimpresor DYMA — 3 copias por hoja A4.
+ * Factura autoimpresor DYMA — 2 copias por hoja A4.
  *
- * La clienta imprime en talonario continuo donde entran 3 comprobantes por hoja
- * A4 (~9,6 cm de alto cada uno). Por eso las tres copias —Original, Duplicado y
- * Triplicado de la MISMA factura— se apilan en una sola A4, en vez de una copia
- * por hoja. La emisión fiscal y la impresión son actos separados: esta plantilla
- * no asigna números, solo representa la factura con el número ya emitido.
+ * Cada factura sale con dos copias —Original y Copia— apiladas en una sola A4,
+ * cada una de ~14,4 cm de alto (media hoja). El encabezado es compacto y el
+ * cuerpo deja lugar para más renglones de descripción; la hoja tiene un margen
+ * izquierdo de ~16 mm para perforar (bibliorato) sin cortar datos.
  *
- * Cada copia mide ~96 mm (≈9,6 cm) de alto; las tres suman ~290 mm y entran en
- * una hoja A4 (297 mm) al imprimir con márgenes en «Ninguno» (por eso el CSS usa
- * `@page{margin:0}`). Se conservan los datos fiscales exigidos: RUC, timbrado,
- * vigencia, establecimiento, punto de expedición, condición, desglose de IVA y
- * total. Con muchos ítems se pagina a más hojas A4 (3 copias por hoja).
+ * La emisión fiscal y la impresión son actos separados: esta plantilla no asigna
+ * números, solo representa la factura con el número ya emitido. Las dos copias
+ * suman ~292 mm y entran en la A4 (297 mm) al imprimir con márgenes en «Ninguno»
+ * (por eso el CSS usa `@page{margin:0}`). Se conservan los datos fiscales
+ * exigidos: RUC, timbrado, vigencia, establecimiento, punto de expedición,
+ * condición, desglose de IVA y total. Con muchos ítems se pagina a más hojas A4
+ * (2 copias por hoja).
  */
 
-// Ítems que entran cómodos en el tercio de hoja. Con más, se pagina a otra A4.
-const RENGLONES_POR_TERCIO = 5;
+// Ítems que entran cómodos en media hoja. Con más, se pagina a otra A4.
+const RENGLONES_POR_COPIA = 12;
 
 export interface EmisorFactura {
   razon_social: string;
@@ -55,7 +56,7 @@ export interface DatosFactura {
   totales: TotalesFactura;
 }
 
-const COPIAS = ["ORIGINAL", "DUPLICADO", "TRIPLICADO"];
+const COPIAS = ["ORIGINAL", "COPIA"];
 
 function esc(v: unknown): string {
   return String(v ?? "")
@@ -101,8 +102,8 @@ function enLetras(total: number, moneda: string): string {
 function paginar(lineas: LineaImpresa[]): LineaImpresa[][] {
   if (lineas.length === 0) return [[]];
   const paginas: LineaImpresa[][] = [];
-  for (let i = 0; i < lineas.length; i += RENGLONES_POR_TERCIO) {
-    paginas.push(lineas.slice(i, i + RENGLONES_POR_TERCIO));
+  for (let i = 0; i < lineas.length; i += RENGLONES_POR_COPIA) {
+    paginas.push(lineas.slice(i, i + RENGLONES_POR_COPIA));
   }
   return paginas;
 }
@@ -124,7 +125,7 @@ function filas(lineas: LineaImpresa[], moneda: string): string {
 }
 
 /**
- * Un tercio de la A4: una copia completa de la factura, compacta.
+ * Media A4: una copia completa de la factura (Original o Copia).
  */
 function copia(
   datos: DatosFactura,
@@ -223,13 +224,14 @@ export function plantillaFactura(datos: DatosFactura, opciones?: { autoImprimir?
   .toolbar button{border:0;border-radius:8px;background:#166c74;color:#fff;padding:9px 18px;font-size:13px;font-weight:700;cursor:pointer}
   .aviso{width:210mm;margin:8px auto 0;padding:9px 14px;border:1px solid #f1c76d;border-radius:8px;background:#fff7df;color:#6f5015;font-size:12px}
 
-  /* Una hoja A4 = 3 copias apiladas (~9,5 cm cada una). Alto automático apenas
-     menor que la A4 para que no desborde a una hoja en blanco al imprimir. */
+  /* Una hoja A4 = 2 copias apiladas (~14,4 cm cada una). El padding izquierdo de
+     16 mm deja el margen para perforar (agujeros de bibliorato) sin cortar datos.
+     Alto apenas menor que la A4 para no desbordar a una hoja en blanco. */
   .a4{width:210mm;margin:10px auto;background:#fff;box-shadow:0 2px 18px rgba(15,23,42,.08);
-      display:flex;flex-direction:column;padding:0.6mm 3mm}
-  .copia{height:96mm;overflow:hidden;display:flex;flex-direction:column;
-         border:1px solid #17323f;border-radius:2mm;padding:2.2mm 3mm;font-size:7.6pt}
-  .copia + .copia{margin-top:0.6mm}
+      display:flex;flex-direction:column;padding:1mm 5mm 1mm 16mm}
+  .copia{height:144mm;overflow:hidden;display:flex;flex-direction:column;
+         border:1px solid #17323f;border-radius:2mm;padding:3mm 4mm;font-size:8.6pt}
+  .copia + .copia{margin-top:1.5mm}
 
   .cab{display:flex;justify-content:space-between;gap:4mm;align-items:flex-start}
   .marca{flex:1;min-width:0}
