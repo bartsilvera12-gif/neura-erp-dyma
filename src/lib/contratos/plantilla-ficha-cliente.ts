@@ -3,9 +3,10 @@ import type { ContratoConfig } from "./types";
 /**
  * Ficha del cliente imprimible.
  *
- * Es la hoja que se archiva en la carpeta del cliente: quién es, qué compró,
- * cómo viene pagando y qué servicios de limpieza se le facturaron. Reúne en una
- * página lo que hoy hay que ir a buscar a cuatro pantallas distintas.
+ * Es la hoja de datos personales que se archiva en la carpeta del cliente y que
+ * el cliente firma al pie. A pedido de la clienta, muestra únicamente los datos
+ * personales: los contratos, saldos y servicios se consultan desde sus propias
+ * pantallas, no en esta hoja.
  *
  * Los datos que faltan salen como raya, igual que en el contrato: la ficha se
  * completa a mano antes de archivarla, no se inventa nada.
@@ -24,10 +25,6 @@ function esc(v: unknown): string {
 function d(v: unknown, largo = 18): string {
   const s = String(v ?? "").trim();
   return s ? esc(s) : "_".repeat(largo);
-}
-
-function gs(n: number): string {
-  return `Gs. ${Math.round(Number(n) || 0).toLocaleString("es-PY")}`;
 }
 
 function fmtFecha(ymd: string): string {
@@ -93,67 +90,14 @@ export function plantillaFichaCliente(
   datos: DatosFichaCliente,
   opciones?: { autoImprimir?: boolean }
 ): string {
-  const { config, cliente, contratos, limpiezas, logoUrl } = datos;
+  const { config, cliente, logoUrl } = datos;
 
-  const totalSaldo = contratos.reduce((a, c) => a + c.saldo, 0);
-  const totalMora = contratos.reduce((a, c) => a + c.mora, 0);
-  const totalLimpieza = limpiezas.reduce((a, l) => a + l.importe, 0);
-
-  const contratosHtml =
-    contratos.length === 0
-      ? `<p class="vacio">Este cliente todavía no tiene contratos de lote.</p>`
-      : `<table>
-    <thead>
-      <tr><th>Contrato</th><th>Fecha</th><th>Lote</th><th>Modalidad</th><th>Precio</th><th>Cuotas</th><th>Saldo</th><th>Mora</th><th>Estado</th></tr>
-    </thead>
-    <tbody>
-      ${contratos
-        .map(
-          (c) => `<tr>
-        <td class="c"><strong>${esc(c.numero)}</strong></td>
-        <td class="c">${esc(fmtFecha(c.fecha))}</td>
-        <td>${esc(c.lote)}</td>
-        <td class="c">${esc(c.modalidad)}</td>
-        <td class="n">${gs(c.precio_total)}</td>
-        <td class="c">${c.cuotas_pagadas} / ${c.cuotas}</td>
-        <td class="n">${gs(c.saldo)}</td>
-        <td class="n">${c.mora > 0 ? gs(c.mora) : "—"}</td>
-        <td class="c">${esc(c.estado)}</td>
-      </tr>`
-        )
-        .join("")}
-    </tbody>
-    <tfoot>
-      <tr><td colspan="6">Totales</td><td class="n">${gs(totalSaldo)}</td><td class="n">${
-          totalMora > 0 ? gs(totalMora) : "—"
-        }</td><td></td></tr>
-    </tfoot>
-  </table>`;
-
-  const limpiezaHtml =
-    limpiezas.length === 0
-      ? `<p class="vacio">Sin servicios de limpieza facturados.</p>`
-      : `<table>
-    <thead>
-      <tr><th>Fecha</th><th>Detalle</th><th>Importe</th><th>Factura</th><th>Estado</th></tr>
-    </thead>
-    <tbody>
-      ${limpiezas
-        .map(
-          (l) => `<tr>
-        <td class="c">${esc(fmtFecha(l.fecha))}</td>
-        <td>${esc(l.observacion ?? "Servicio de limpieza de lote")}</td>
-        <td class="n">${gs(l.importe)}</td>
-        <td class="c">${esc(l.factura ?? "—")}</td>
-        <td class="c">${esc(l.estado ?? "—")}</td>
-      </tr>`
-        )
-        .join("")}
-    </tbody>
-    <tfoot>
-      <tr><td colspan="2">Total facturado en limpieza</td><td class="n">${gs(totalLimpieza)}</td><td colspan="2"></td></tr>
-    </tfoot>
-  </table>`;
+  // Documento que se transcribe bajo la firma: RUC-DV si es contribuyente, si no la C.I.
+  const docFirma = cliente.ruc
+    ? `RUC ${cliente.dv ? `${cliente.ruc}-${cliente.dv}` : cliente.ruc}`
+    : cliente.documento
+      ? `C.I. ${cliente.documento}`
+      : "C.I. / RUC";
 
   return `<!doctype html>
 <html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
@@ -161,7 +105,7 @@ export function plantillaFichaCliente(
 <style>
   *{box-sizing:border-box} html,body{margin:0;padding:0}
   body{font-family:-apple-system,"Segoe UI",Roboto,Arial,sans-serif;color:#111827;background:#f3f4f6;font-size:11pt;line-height:1.45}
-  .page{width:210mm;margin:0 auto;background:#fff;padding:18mm 20mm}
+  .page{width:210mm;min-height:257mm;margin:0 auto;background:#fff;padding:18mm 20mm;display:flex;flex-direction:column}
   .membrete{display:flex;justify-content:space-between;align-items:flex-start;gap:18px;border-bottom:2px solid #111827;padding-bottom:10px;margin-bottom:14px}
   .membrete .logo{max-width:180px;max-height:70px;object-fit:contain;display:block}
   .membrete .logo-txt{font-size:15pt;font-weight:800}
@@ -184,8 +128,13 @@ export function plantillaFichaCliente(
   th{background:#f3f4f6;font-weight:700;text-align:center;font-size:8.5pt;text-transform:uppercase;letter-spacing:.03em}
   td.c{text-align:center} td.n{text-align:right}
   tfoot td{background:#f9fafb;font-weight:800}
-  .vacio{font-size:10pt;color:#6b7280;background:#f9fafb;border:1px solid #e5e7eb;border-radius:6px;padding:10px 12px}
-  .pie{margin-top:26px;font-size:8.5pt;color:#9ca3af;border-top:1px solid #e5e7eb;padding-top:8px}
+  .firma-wrap{margin-top:auto;padding-top:40px}
+  .firma{width:70mm;margin:48px auto 0;text-align:center}
+  .firma .linea{border-top:1px solid #111827;padding-top:6px}
+  .firma .nombre{font-size:11pt;font-weight:700}
+  .firma .doc{font-size:9pt;color:#374151;margin-top:1px}
+  .firma .label{font-size:9pt;color:#6b7280;text-transform:uppercase;letter-spacing:.05em;margin-top:2px}
+  .pie{margin-top:20px;font-size:8.5pt;color:#9ca3af;border-top:1px solid #e5e7eb;padding-top:8px}
   .toolbar{max-width:210mm;margin:12px auto;text-align:right}
   .toolbar button{font-size:13px;padding:8px 16px;border-radius:8px;border:1px solid #0EA5E9;background:#0EA5E9;color:#fff;cursor:pointer}
   @media print{
@@ -230,23 +179,16 @@ export function plantillaFichaCliente(
   ${fila("Ciudad", d(cliente.ciudad, 14))}
 </div>
 
-<div class="resumen">
-  <div class="kpi"><div class="k">Contratos</div><div class="v">${contratos.length}</div></div>
-  <div class="kpi"><div class="k">Saldo por cobrar</div><div class="v">${gs(totalSaldo)}</div></div>
-  <div class="kpi${totalMora > 0 ? " alerta" : ""}"><div class="k">Mora a hoy</div><div class="v">${
-    totalMora > 0 ? gs(totalMora) : "Al día"
-  }</div></div>
+<div class="firma-wrap">
+  <div class="firma">
+    <div class="linea">
+      <div class="nombre">${esc(cliente.nombre)}</div>
+      <div class="doc">${esc(docFirma)}</div>
+      <div class="label">Firma del cliente</div>
+    </div>
+  </div>
+  <p class="pie">Documento interno, no fiscal. Emitida el ${esc(fmtFecha(datos.emitida))}.</p>
 </div>
-
-<h2>Lotes y contratos</h2>
-${contratosHtml}
-
-<h2>Servicios de limpieza</h2>
-${limpiezaHtml}
-
-<p class="pie">Documento interno, no fiscal. La mora se calcula al ${esc(
-    fmtFecha(datos.emitida)
-  )} y cambia con el paso de los días.</p>
 
 </div>
 <script>try{ if (${opciones?.autoImprimir ? "true" : "false"}) window.print(); }catch(e){}</script>
