@@ -218,7 +218,7 @@ export function plantillaFichaCliente(
 <style>
   *{box-sizing:border-box} html,body{margin:0;padding:0}
   body{font-family:-apple-system,"Segoe UI",Roboto,Arial,sans-serif;color:#111827;background:#f3f4f6;font-size:11pt;line-height:1.45}
-  .page{width:210mm;min-height:257mm;margin:0 auto;background:#fff;padding:18mm 20mm;display:flex;flex-direction:column}
+  .page{width:210mm;min-height:257mm;margin:0 auto 16px;background:#fff;padding:18mm 20mm;display:flex;flex-direction:column;box-shadow:0 1px 10px rgba(15,23,42,.12)}
   .membrete{display:flex;justify-content:space-between;align-items:flex-start;gap:18px;border-bottom:2px solid #111827;padding-bottom:10px;margin-bottom:14px}
   .membrete .logo{max-width:180px;max-height:70px;object-fit:contain;display:block}
   .membrete .logo-txt{font-size:15pt;font-weight:800}
@@ -254,7 +254,7 @@ export function plantillaFichaCliente(
   .toolbar{max-width:210mm;margin:12px auto;text-align:right}
   .toolbar button{font-size:13px;padding:8px 16px;border-radius:8px;border:1px solid #0EA5E9;background:#0EA5E9;color:#fff;cursor:pointer}
   @media print{
-    body{background:#fff} .toolbar{display:none} .page{width:auto;min-height:auto;padding:0;margin:0}
+    body{background:#fff} .toolbar{display:none} .page{width:auto;min-height:auto;padding:0;margin:0;box-shadow:none}
     /* La hoja de anexo (lotes y contratos) SIEMPRE arranca en página nueva:
        la ficha firmable queda sola en su hoja. Moderna + legacy por Chrome. */
     .anexo{break-before:page;page-break-before:always}
