@@ -10,7 +10,7 @@ import type { LineaImpresa, TotalesFactura } from "./factura-fiscal";
  * por hoja. La emisión fiscal y la impresión son actos separados: esta plantilla
  * no asigna números, solo representa la factura con el número ya emitido.
  *
- * Cada copia mide ~95 mm (≈9,6 cm) de alto; las tres suman ~287 mm y entran en
+ * Cada copia mide ~96 mm (≈9,6 cm) de alto; las tres suman ~290 mm y entran en
  * una hoja A4 (297 mm) al imprimir con márgenes en «Ninguno» (por eso el CSS usa
  * `@page{margin:0}`). Se conservan los datos fiscales exigidos: RUC, timbrado,
  * vigencia, establecimiento, punto de expedición, condición, desglose de IVA y
@@ -226,8 +226,8 @@ export function plantillaFactura(datos: DatosFactura, opciones?: { autoImprimir?
   /* Una hoja A4 = 3 copias apiladas (~9,5 cm cada una). Alto automático apenas
      menor que la A4 para que no desborde a una hoja en blanco al imprimir. */
   .a4{width:210mm;margin:10px auto;background:#fff;box-shadow:0 2px 18px rgba(15,23,42,.08);
-      display:flex;flex-direction:column;padding:0.6mm 4mm}
-  .copia{height:95mm;overflow:hidden;display:flex;flex-direction:column;
+      display:flex;flex-direction:column;padding:0.6mm 3mm}
+  .copia{height:96mm;overflow:hidden;display:flex;flex-direction:column;
          border:1px solid #17323f;border-radius:2mm;padding:2.2mm 3mm;font-size:7.6pt}
   .copia + .copia{margin-top:0.6mm}
 
