@@ -139,7 +139,7 @@ export function plantillaCompraventaPlazos(datos: DatosContrato, opciones?: { au
       ${cuotas
         .map(
           (c) => `<tr>
-        <td class="c">${c.numero}</td>
+        <td class="c">${c.numero}${c.es_cancelacion ? " — Cancelación" : ""}</td>
         <td class="c">${fmtFecha(c.vencimiento)}</td>
         <td>${gs(c.capital)}</td>
         <td>${gs(c.total)}</td>

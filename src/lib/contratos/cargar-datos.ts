@@ -256,7 +256,10 @@ export async function cargarDatosContrato(
     .eq("empresa_id", empresaId)
     .order("numero");
 
-  const cuotas: CuotaContrato[] = ((cuotasRaw ?? []) as Record<string, unknown>[]).map((c) => ({
+  // En un plan personalizado la última cuota es la "Cancelación de saldo".
+  const personalizada = v.plan_tipo === "personalizada";
+  const cuotasArr = (cuotasRaw ?? []) as Record<string, unknown>[];
+  const cuotas: CuotaContrato[] = cuotasArr.map((c, idx) => ({
     numero: Number(c.numero ?? 0),
     vencimiento: ymd(c.vencimiento),
     capital: Number(c.capital ?? 0),
@@ -265,6 +268,7 @@ export async function cargarDatosContrato(
     estado: c.estado === "pagada" || c.estado === "anulada" ? c.estado : "pendiente",
     saldo: c.saldo == null ? undefined : Number(c.saldo),
     pagada_at: (c.pagada_at as string) ?? null,
+    es_cancelacion: personalizada && idx === cuotasArr.length - 1,
   }));
 
   const datos: DatosContrato = {

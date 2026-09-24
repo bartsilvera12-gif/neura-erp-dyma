@@ -82,6 +82,9 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
 
     const hoy = hoyAsuncion();
     const diasGracia = Number(v.dias_gracia ?? 5);
+    // En un plan personalizado la última cuota (mayor número) es la cancelación.
+    const personalizada = v.plan_tipo === "personalizada";
+    const ultimoNumero = filasCuotas.length;
 
     const cuotas: CuotaVenta[] = filasCuotas.map((c) => {
       const saldo = Number(c.saldo ?? 0);
@@ -110,6 +113,7 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
         mora_moratoria: m.gastos_moratorios,
         mora_total: m.total,
         total_a_pagar: saldo + m.total,
+        es_cancelacion: personalizada && Number(c.numero) === ultimoNumero,
       };
     });
 

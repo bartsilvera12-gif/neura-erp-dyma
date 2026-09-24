@@ -233,7 +233,14 @@ export default function ContratoClient({ ventaId }: { ventaId: string }) {
             <tbody className="divide-y divide-slate-100">
               {data.cuotas.map((c) => (
                 <tr key={c.id} className={c.dias_atraso > 0 && c.estado === "pendiente" ? "bg-rose-50/40" : ""}>
-                  <td className="px-3 py-2.5 font-medium text-slate-700">{c.numero}</td>
+                  <td className="px-3 py-2.5 font-medium text-slate-700">
+                    {c.numero}
+                    {c.es_cancelacion ? (
+                      <span className="ml-1.5 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700">
+                        Cancelación
+                      </span>
+                    ) : null}
+                  </td>
                   <td className="whitespace-nowrap px-3 py-2.5 tabular-nums text-slate-600">
                     {fmtFecha(c.vencimiento)}
                   </td>

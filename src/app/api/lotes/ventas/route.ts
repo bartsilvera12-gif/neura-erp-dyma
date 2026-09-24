@@ -5,10 +5,12 @@ import {
   calcularMoraCuota,
   esFrecuencia,
   generarPlanCuotas,
+  generarPlanManual,
   DIAS_GRACIA,
   MORA_ADMINISTRATIVA_DIARIA,
   MORA_MORATORIA_DIARIA,
   RECARGO_FINANCIACION,
+  type CuotaManualInput,
 } from "@/lib/financiacion/plan-cuotas";
 import { hoyAsuncion } from "@/lib/reportes/calculo";
 import { pctDesdeFormulario } from "@/lib/vendedores/calculo-comision";
@@ -40,6 +42,21 @@ function leerPartes(valor: unknown): ParteContrato[] {
       telefono: txt("telefono"),
       email: txt("email"),
       observacion: txt("observacion"),
+    });
+  }
+  return out;
+}
+
+/** Normaliza las cuotas cargadas a mano del plan personalizado. */
+function leerCuotasManuales(valor: unknown): CuotaManualInput[] {
+  if (!Array.isArray(valor)) return [];
+  const out: CuotaManualInput[] = [];
+  for (const item of valor) {
+    if (!item || typeof item !== "object") continue;
+    const c = item as Record<string, unknown>;
+    out.push({
+      vencimiento: typeof c.vencimiento === "string" ? c.vencimiento.trim() : "",
+      monto: Number(c.monto),
     });
   }
   return out;
@@ -200,10 +217,17 @@ export async function POST(request: Request) {
   // recargo ni entrega: el mismo contrato, pagado de una vez. Así la venta entra
   // al circuito de factura, cobranza y comisión sin un camino aparte.
   const contado = body.modalidad === "contado";
+  // Plan personalizado: cuotas cargadas a mano, sin interés, con cuota final de
+  // cancelación. Es una venta financiada; solo cambia cómo se arman las cuotas.
+  const personalizada = !contado && body.plan_tipo === "personalizada";
+  const cuotasManuales = personalizada ? leerCuotasManuales(body.cuotas_manuales) : [];
+  const cancelacionVencimiento =
+    typeof body.cancelacion_vencimiento === "string" ? body.cancelacion_vencimiento.trim() : "";
   const cantidadCuotas = contado ? 1 : Number(body.cantidad_cuotas);
   const precioContado = Number(body.precio_contado);
   const entregaInicial = contado ? 0 : Number(body.entrega_inicial ?? 0);
-  const recargo = contado ? 0 : body.recargo_pct == null ? RECARGO_FINANCIACION : Number(body.recargo_pct);
+  // Al contado o en plan personalizado no hay recargo de financiación.
+  const recargo = contado || personalizada ? 0 : body.recargo_pct == null ? RECARGO_FINANCIACION : Number(body.recargo_pct);
   const frecuencia = esFrecuencia(body.frecuencia) ? body.frecuencia : "mensual";
   const simulacionId =
     typeof body.simulacion_id === "string" && body.simulacion_id.trim() ? body.simulacion_id.trim() : null;
@@ -213,7 +237,13 @@ export async function POST(request: Request) {
       : null;
   const partes = leerPartes(body.partes);
   const observacion = typeof body.observacion === "string" ? body.observacion.trim() : "";
-  const primerVencimiento = contado ? fechaVenta : primerVencimientoRaw;
+  // En el plan personalizado el "primer vencimiento" es el de la primera cuota
+  // cargada a mano; el resto de las fechas van en cada cuota.
+  const primerVencimiento = contado
+    ? fechaVenta
+    : personalizada
+      ? cuotasManuales[0]?.vencimiento ?? ""
+      : primerVencimientoRaw;
   const vendedorId = typeof body.vendedor_id === "string" && body.vendedor_id.trim() ? body.vendedor_id.trim() : null;
   // El % se congela acá: renegociar con el vendedor no reescribe contratos firmados.
   const comisionPct = pctDesdeFormulario(body.comision_pct == null ? 0 : (body.comision_pct as string | number));
@@ -245,14 +275,21 @@ export async function POST(request: Request) {
 
   let plan;
   try {
-    plan = generarPlanCuotas({
-      precioContado,
-      entregaInicial,
-      cantidadCuotas,
-      primerVencimiento,
-      recargo,
-      frecuencia,
-    });
+    plan = personalizada
+      ? generarPlanManual({
+          precioContado,
+          entregaInicial,
+          cuotas: cuotasManuales,
+          cancelacionVencimiento,
+        })
+      : generarPlanCuotas({
+          precioContado,
+          entregaInicial,
+          cantidadCuotas,
+          primerVencimiento,
+          recargo,
+          frecuencia,
+        });
   } catch (e) {
     // Los errores del motor son de negocio y ya vienen redactados para el usuario.
     return NextResponse.json(errorResponse(e instanceof Error ? e.message : "Plan inválido"), { status: 400 });
@@ -334,6 +371,7 @@ export async function POST(request: Request) {
         mora_moratoria_pct: MORA_MORATORIA_DIARIA,
         estado: "vigente",
         modalidad: contado ? "contado" : "financiada",
+        plan_tipo: personalizada ? "personalizada" : "automatica",
         observacion: observacion || null,
         vendedor_id: vendedorId,
         comision_pct: comisionPct,

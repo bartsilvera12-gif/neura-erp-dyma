@@ -111,6 +111,8 @@ export interface CuotaContrato {
   /** Lo que resta de la cuota. Menor al total si hubo pagos parciales. */
   saldo?: number;
   pagada_at?: string | null;
+  /** Cuota final de cancelación de un plan personalizado (se etiqueta aparte). */
+  es_cancelacion?: boolean;
 }
 
 /** Todo lo que necesita la plantilla para armar el documento. */

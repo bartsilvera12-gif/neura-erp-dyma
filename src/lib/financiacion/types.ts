@@ -34,6 +34,8 @@ export interface CuotaVenta {
   mora_total: number;
   /** Saldo + mora: lo que hay que cobrar hoy para cancelar la cuota. */
   total_a_pagar: number;
+  /** Cuota final de cancelación de un plan personalizado (se etiqueta aparte). */
+  es_cancelacion?: boolean;
 }
 
 export interface VentaLote {

@@ -266,6 +266,120 @@ export function generarPlanCuotas(input: {
   };
 }
 
+/** Una cuota cargada a mano en el plan personalizado: fecha y monto, sin interés. */
+export interface CuotaManualInput {
+  /** Vencimiento YYYY-MM-DD. */
+  vencimiento: string;
+  /** Importe de la cuota en guaraníes (sin interés: es capital puro). */
+  monto: number;
+}
+
+/**
+ * Arma un plan de pago PERSONALIZADO: el vendedor define a mano cada cuota
+ * (fecha y monto) y una cuota final de "cancelación" cuya fecha también se
+ * indica a mano, pero cuyo importe lo calcula el sistema con el saldo restante.
+ *
+ * A diferencia del plan francés, acá NO hay interés: cada cuota es capital puro
+ * (interés 0, capital = total), y la suma de todas las cuotas —incluida la
+ * cancelación— es exactamente el saldo a financiar (precio de contado − entrega).
+ * Los montos pueden repetirse y las fechas se cargan libremente.
+ *
+ * La cancelación cierra el saldo: cancelación = financiado − suma de las cuotas
+ * cargadas. Por eso la suma cargada tiene que ser menor al financiado, para que
+ * a la cancelación le quede un importe mayor a cero.
+ */
+export function generarPlanManual(input: {
+  precioContado: number;
+  entregaInicial?: number;
+  /** Cuotas cargadas a mano, en orden. La cancelación va aparte. */
+  cuotas: CuotaManualInput[];
+  /** Vencimiento de la cuota final de cancelación (recibe el saldo restante). */
+  cancelacionVencimiento: string;
+}): PlanCuotas {
+  const precioContado = Math.round(input.precioContado);
+  const entrega = Math.round(input.entregaInicial ?? 0);
+
+  if (!Number.isFinite(precioContado) || precioContado <= 0) {
+    throw new Error("El precio de contado debe ser mayor a 0");
+  }
+  if (entrega < 0) throw new Error("La entrega inicial no puede ser negativa");
+  if (entrega >= precioContado) {
+    throw new Error("La entrega inicial no puede cubrir todo el precio: no habría nada que financiar");
+  }
+
+  const capital = precioContado - entrega; // saldo a financiar, sin interés
+
+  const manuales = input.cuotas ?? [];
+  if (manuales.length < 1) {
+    throw new Error("Cargá al menos una cuota antes de la cuota de cancelación");
+  }
+  if (manuales.length + 1 > MAX_CUOTAS) {
+    throw new Error(`El plan no puede tener más de ${MAX_CUOTAS} cuotas.`);
+  }
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(input.cancelacionVencimiento))) {
+    throw new Error("La fecha de la cuota de cancelación es inválida");
+  }
+
+  const montos: number[] = [];
+  let suma = 0;
+  manuales.forEach((c, idx) => {
+    const monto = Math.round(Number(c.monto));
+    if (!Number.isFinite(monto) || monto <= 0) {
+      throw new Error(`El monto de la cuota ${idx + 1} debe ser mayor a 0`);
+    }
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(String(c.vencimiento))) {
+      throw new Error(`La fecha de vencimiento de la cuota ${idx + 1} es inválida`);
+    }
+    montos.push(monto);
+    suma += monto;
+  });
+
+  if (suma >= capital) {
+    throw new Error(
+      `La suma de las cuotas (${suma.toLocaleString("es-PY")}) debe ser menor al saldo a financiar ` +
+        `(${capital.toLocaleString("es-PY")}) para dejar importe a la cuota de cancelación.`
+    );
+  }
+  const cancelacion = capital - suma; // > 0 por la validación anterior
+
+  const cuotas: Cuota[] = [];
+  let saldo = capital;
+  montos.forEach((monto, k) => {
+    const saldoFin = saldo - monto;
+    cuotas.push({
+      numero: k + 1,
+      vencimiento: manuales[k].vencimiento,
+      saldo_inicial: saldo,
+      interes: 0,
+      capital: monto,
+      total: monto,
+      saldo_final: saldoFin,
+    });
+    saldo = saldoFin;
+  });
+  // Cuota final de cancelación: se lleva todo el saldo restante.
+  cuotas.push({
+    numero: montos.length + 1,
+    vencimiento: input.cancelacionVencimiento,
+    saldo_inicial: saldo,
+    interes: 0,
+    capital: cancelacion,
+    total: cancelacion,
+    saldo_final: 0,
+  });
+
+  return {
+    precio_contado: precioContado,
+    entrega_inicial: entrega,
+    capital,
+    cuota_exacta: 0,
+    interes_total: 0,
+    monto_financiado: capital, // sin interés: financiado = capital
+    total_operacion: entrega + capital,
+    cuotas,
+  };
+}
+
 /** Cómo se resolvió la simulación: qué dato puso el usuario y cuál dedujo el sistema. */
 export type ModoSimulacion = "por_cuota" | "por_cantidad";
 

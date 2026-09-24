@@ -9,6 +9,7 @@ import MontoInput from "@/components/ui/MontoInput";
 import { FechaSelect } from "@/components/ui/FechaSelect";
 import {
   generarPlanCuotas,
+  generarPlanManual,
   FRECUENCIAS,
   MAX_CUOTAS,
   DIAS_GRACIA,
@@ -107,8 +108,15 @@ export default function ModalVenderLote({
   );
   const [entrega, setEntrega] = useState(String(inicial?.entrega_inicial ?? 0));
   const [cuotas, setCuotas] = useState(String(inicial?.cantidad_cuotas ?? 12));
-  const [recargo, setRecargo] = useState(inicial?.recargo_pct ?? RECARGO_FINANCIACION);
+  const [recargo] = useState(inicial?.recargo_pct ?? RECARGO_FINANCIACION);
   const [frecuencia, setFrecuencia] = useState<Frecuencia>(inicial?.frecuencia ?? "mensual");
+  // Tipo de plan: automático (amortización francesa) o personalizado (cuotas a mano).
+  const [planTipo, setPlanTipo] = useState<"automatica" | "personalizada">("automatica");
+  // Cuotas del plan personalizado (montos limpios, sin interés). La cancelación va aparte.
+  const [cuotasManuales, setCuotasManuales] = useState<{ vencimiento: string; monto: string }[]>(
+    () => [{ vencimiento: hoyYmd(), monto: "" }]
+  );
+  const [cancelacionVenc, setCancelacionVenc] = useState(hoyYmd());
   const [observacion, setObservacion] = useState("");
   const [vendedorId, setVendedorId] = useState("");
   /** En porcentaje, como lo escribe el vendedor ("3"); la API lo pasa a fracción. */
@@ -154,25 +162,55 @@ export default function ModalVenderLote({
   }
 
   const moneda = lote.moneda;
+  const esPersonalizada = planTipo === "personalizada";
+
+  // Cuotas personalizadas con monto cargado (las vacías se ignoran para la previa).
+  const cuotasManualesLimpias = useMemo(
+    () =>
+      cuotasManuales
+        .filter((c) => Number(c.monto) > 0)
+        .map((c) => ({ vencimiento: c.vencimiento, monto: Number(c.monto) })),
+    [cuotasManuales]
+  );
+  const financiado = Math.max(0, Math.round(Number(precioContado) || 0) - Math.round(Number(entrega) || 0));
+  const sumaManual = cuotasManualesLimpias.reduce((a, c) => a + c.monto, 0);
+  const saldoCancelacion = financiado - sumaManual;
 
   /** Vista previa del plan. Si los datos no cierran, el motor avisa por qué. */
   const preview = useMemo(() => {
     try {
       return {
-        plan: generarPlanCuotas({
-          precioContado: Number(precioContado),
-          entregaInicial: Number(entrega),
-          cantidadCuotas: Number(cuotas),
-          primerVencimiento,
-          recargo,
-          frecuencia,
-        }),
+        plan: esPersonalizada
+          ? generarPlanManual({
+              precioContado: Number(precioContado),
+              entregaInicial: Number(entrega),
+              cuotas: cuotasManualesLimpias,
+              cancelacionVencimiento: cancelacionVenc,
+            })
+          : generarPlanCuotas({
+              precioContado: Number(precioContado),
+              entregaInicial: Number(entrega),
+              cantidadCuotas: Number(cuotas),
+              primerVencimiento,
+              recargo,
+              frecuencia,
+            }),
         error: null as string | null,
       };
     } catch (e) {
       return { plan: null, error: e instanceof Error ? e.message : "Datos inválidos" };
     }
-  }, [precioContado, entrega, cuotas, primerVencimiento, recargo, frecuencia]);
+  }, [
+    esPersonalizada,
+    precioContado,
+    entrega,
+    cuotas,
+    primerVencimiento,
+    recargo,
+    frecuencia,
+    cuotasManualesLimpias,
+    cancelacionVenc,
+  ]);
 
   const faltaConyuge = tipoElegido?.requiere_conyuge === true && !conyuge.nombre.trim();
   const faltaCodeudor =
@@ -195,12 +233,17 @@ export default function ModalVenderLote({
             ...(tipoElegido?.requiere_codeudor ? codeudores : []),
           ].filter((x) => x.nombre.trim()),
           fecha_venta: fechaVenta,
-          primer_vencimiento: primerVencimiento,
+          primer_vencimiento: esPersonalizada
+            ? cuotasManualesLimpias[0]?.vencimiento ?? ""
+            : primerVencimiento,
           precio_contado: Number(precioContado),
           entrega_inicial: Number(entrega),
           cantidad_cuotas: Number(cuotas),
           recargo_pct: recargo,
           frecuencia,
+          plan_tipo: planTipo,
+          cuotas_manuales: esPersonalizada ? cuotasManualesLimpias : undefined,
+          cancelacion_vencimiento: esPersonalizada ? cancelacionVenc : undefined,
           simulacion_id: inicial?.simulacion_id ?? null,
           observacion,
           vendedor_id: vendedorId || null,
@@ -237,7 +280,9 @@ export default function ModalVenderLote({
           <div>
             <h3 className="text-base font-semibold text-slate-900">Vender lote {lote.numero}</h3>
             <p className="mt-0.5 text-[11px] text-slate-500">
-              Cuota fija por sistema de amortización francés (calculadora del BCP), con tasa del {(recargo * 100).toFixed(2).replace(/\.?0+$/, "")}% anual sobre el saldo.
+              {esPersonalizada
+                ? "Plan personalizado: cargá cada cuota a mano (sin interés) y una cuota final de cancelación con el saldo restante."
+                : `Cuota fija por sistema de amortización francés (calculadora del BCP), con tasa del ${(recargo * 100).toFixed(2).replace(/\.?0+$/, "")}% anual sobre el saldo.`}
             </p>
           </div>
           <button type="button" onClick={onCancel} className="rounded-lg p-1 text-slate-400 hover:bg-slate-100">
@@ -342,14 +387,16 @@ export default function ModalVenderLote({
             <label className={labelClass}>Fecha de la venta</label>
             <FechaSelect value={fechaVenta} onChange={(e) => setFechaVenta(e.target.value)} className={inputClass} />
           </div>
-          <div>
-            <label className={labelClass}>Vencimiento de la primera cuota</label>
-            <FechaSelect
-              value={primerVencimiento}
-              onChange={(e) => setPrimerVencimiento(e.target.value)}
-              className={inputClass}
-            />
-          </div>
+          {!esPersonalizada ? (
+            <div>
+              <label className={labelClass}>Vencimiento de la primera cuota</label>
+              <FechaSelect
+                value={primerVencimiento}
+                onChange={(e) => setPrimerVencimiento(e.target.value)}
+                className={inputClass}
+              />
+            </div>
+          ) : null}
           <div>
             <label className={labelClass}>Precio de contado</label>
             <MontoInput
@@ -368,26 +415,162 @@ export default function ModalVenderLote({
               className={inputClass}
             />
           </div>
-          <div>
-            <label className={labelClass}>Frecuencia de pago</label>
-            <FancySelect
-              value={frecuencia}
-              onChange={(v) => setFrecuencia(v as Frecuencia)}
-              options={Object.entries(FRECUENCIAS).map(([k, f]) => ({ value: k, label: f.label }))}
-            />
+
+          {/* Tipo de plan: automático (francés) o personalizado (cuotas a mano). */}
+          <div className="sm:col-span-2">
+            <label className={labelClass}>Tipo de plan</label>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => setPlanTipo("automatica")}
+                className={`rounded-xl border px-3 py-2 text-left text-xs font-semibold transition-colors ${
+                  !esPersonalizada
+                    ? "border-[#0EA5E9] bg-[#0EA5E9]/10 text-[#0284C7]"
+                    : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+                }`}
+              >
+                Plan automático
+                <span className="mt-0.5 block text-[10px] font-normal text-slate-400">Cuota fija (sistema francés)</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setPlanTipo("personalizada")}
+                className={`rounded-xl border px-3 py-2 text-left text-xs font-semibold transition-colors ${
+                  esPersonalizada
+                    ? "border-[#0EA5E9] bg-[#0EA5E9]/10 text-[#0284C7]"
+                    : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+                }`}
+              >
+                Plan personalizado
+                <span className="mt-0.5 block text-[10px] font-normal text-slate-400">Cuotas a mano + cancelación</span>
+              </button>
+            </div>
           </div>
-          <div>
-            <label className={labelClass}>Cantidad de cuotas</label>
-            <input
-              type="number"
-              min={1}
-              max={MAX_CUOTAS}
-              value={cuotas}
-              onChange={(e) => setCuotas(e.target.value)}
-              className={inputClass}
-            />
-          </div>
-          <div>
+
+          {esPersonalizada ? (
+            <div className="sm:col-span-2">
+              <div className="mb-2 flex items-center justify-between">
+                <label className={labelClass + " mb-0"}>Cuotas del plan</label>
+                <span className="text-[10px] text-slate-400">Montos sin interés</span>
+              </div>
+              <div className="space-y-2">
+                {cuotasManuales.map((c, i) => (
+                  <div key={i} className="flex items-center gap-2">
+                    <span className="w-5 shrink-0 text-center text-xs font-semibold text-slate-500">{i + 1}</span>
+                    <div className="flex-1">
+                      <FechaSelect
+                        value={c.vencimiento}
+                        onChange={(e) =>
+                          setCuotasManuales((prev) =>
+                            prev.map((x, j) => (j === i ? { ...x, vencimiento: e.target.value } : x))
+                          )
+                        }
+                        className={inputClass}
+                      />
+                    </div>
+                    <div className="flex-1">
+                      <MontoInput
+                        value={c.monto}
+                        onChange={(n) =>
+                          setCuotasManuales((prev) => prev.map((x, j) => (j === i ? { ...x, monto: String(n) } : x)))
+                        }
+                        decimals={moneda === "USD"}
+                        className={inputClass}
+                      />
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setCuotasManuales((prev) => (prev.length > 1 ? prev.filter((_, j) => j !== i) : prev))
+                      }
+                      disabled={cuotasManuales.length <= 1}
+                      className="shrink-0 rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-rose-600 disabled:opacity-30"
+                      aria-label="Quitar cuota"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+              <button
+                type="button"
+                onClick={() =>
+                  setCuotasManuales((prev) => [
+                    ...prev,
+                    { vencimiento: prev[prev.length - 1]?.vencimiento ?? hoyYmd(), monto: "" },
+                  ])
+                }
+                className="mt-2 text-[11px] font-semibold text-[#0EA5E9] hover:underline"
+              >
+                + Agregar cuota
+              </button>
+
+              <div className="mt-3 rounded-xl border border-slate-200 bg-slate-50/60 p-3">
+                <div className="flex items-center justify-between gap-2">
+                  <div>
+                    <p className="text-xs font-semibold text-slate-700">Cuota final — Cancelación de saldo</p>
+                    <p className="text-[10px] text-slate-400">El sistema le asigna el saldo restante.</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">Importe</p>
+                    <p
+                      className={`text-sm font-bold tabular-nums ${
+                        saldoCancelacion > 0 ? "text-slate-900" : "text-rose-600"
+                      }`}
+                    >
+                      {fmt(Math.max(0, saldoCancelacion), moneda)}
+                    </p>
+                  </div>
+                </div>
+                <div className="mt-2">
+                  <label className={labelClass}>Vencimiento de la cancelación</label>
+                  <FechaSelect
+                    value={cancelacionVenc}
+                    onChange={(e) => setCancelacionVenc(e.target.value)}
+                    className={inputClass}
+                  />
+                </div>
+              </div>
+
+              <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-slate-500">
+                <span>
+                  Saldo a financiar: <b className="tabular-nums text-slate-700">{fmt(financiado, moneda)}</b>
+                </span>
+                <span>
+                  Suma de cuotas: <b className="tabular-nums text-slate-700">{fmt(sumaManual, moneda)}</b>
+                </span>
+                <span>
+                  Va a la cancelación:{" "}
+                  <b className={`tabular-nums ${saldoCancelacion > 0 ? "text-slate-700" : "text-rose-600"}`}>
+                    {fmt(saldoCancelacion, moneda)}
+                  </b>
+                </span>
+              </div>
+            </div>
+          ) : (
+            <>
+              <div>
+                <label className={labelClass}>Frecuencia de pago</label>
+                <FancySelect
+                  value={frecuencia}
+                  onChange={(v) => setFrecuencia(v as Frecuencia)}
+                  options={Object.entries(FRECUENCIAS).map(([k, f]) => ({ value: k, label: f.label }))}
+                />
+              </div>
+              <div>
+                <label className={labelClass}>Cantidad de cuotas</label>
+                <input
+                  type="number"
+                  min={1}
+                  max={MAX_CUOTAS}
+                  value={cuotas}
+                  onChange={(e) => setCuotas(e.target.value)}
+                  className={inputClass}
+                />
+              </div>
+            </>
+          )}
+          <div className={esPersonalizada ? "sm:col-span-2" : undefined}>
             <label className={labelClass}>
               Observación <span className="font-normal text-slate-400">(opcional)</span>
             </label>
@@ -403,10 +586,21 @@ export default function ModalVenderLote({
         ) : p ? (
           <>
             <div className="mt-4 grid gap-2 rounded-xl border border-slate-200 bg-slate-50/60 p-3 sm:grid-cols-4">
-              <Dato titulo="Capital" valor={fmt(p.capital, moneda)} />
-              <Dato titulo="Total intereses" valor={fmt(p.interes_total, moneda)} />
-              <Dato titulo="Total a pagar" valor={fmt(p.monto_financiado, moneda)} />
-              <Dato titulo="Cuota fija" valor={fmt(p.cuotas[0]?.total ?? 0, moneda)} destacado />
+              {esPersonalizada ? (
+                <>
+                  <Dato titulo="Saldo financiado" valor={fmt(p.capital, moneda)} />
+                  <Dato titulo="Cuotas" valor={String(p.cuotas.length)} />
+                  <Dato titulo="Cancelación" valor={fmt(p.cuotas[p.cuotas.length - 1]?.total ?? 0, moneda)} />
+                  <Dato titulo="Total a pagar" valor={fmt(p.monto_financiado, moneda)} destacado />
+                </>
+              ) : (
+                <>
+                  <Dato titulo="Capital" valor={fmt(p.capital, moneda)} />
+                  <Dato titulo="Total intereses" valor={fmt(p.interes_total, moneda)} />
+                  <Dato titulo="Total a pagar" valor={fmt(p.monto_financiado, moneda)} />
+                  <Dato titulo="Cuota fija" valor={fmt(p.cuotas[0]?.total ?? 0, moneda)} destacado />
+                </>
+              )}
             </div>
 
             <div className="mt-3 max-h-52 overflow-y-auto rounded-xl border border-slate-200">
@@ -423,7 +617,14 @@ export default function ModalVenderLote({
                 <tbody className="divide-y divide-slate-100">
                   {p.cuotas.map((c) => (
                     <tr key={c.numero}>
-                      <td className="px-3 py-1.5 text-slate-700">{c.numero}</td>
+                      <td className="px-3 py-1.5 text-slate-700">
+                        {c.numero}
+                        {esPersonalizada && c.numero === p.cuotas.length ? (
+                          <span className="ml-1 rounded bg-amber-100 px-1 py-0.5 text-[9px] font-semibold text-amber-700">
+                            Cancelación
+                          </span>
+                        ) : null}
+                      </td>
                       <td className="px-3 py-1.5 tabular-nums text-slate-600">{fmtFecha(c.vencimiento)}</td>
                       <td className="px-3 py-1.5 text-right tabular-nums text-slate-600">{fmt(c.capital, moneda)}</td>
                       <td className="px-3 py-1.5 text-right tabular-nums text-slate-600">{fmt(c.interes, moneda)}</td>
