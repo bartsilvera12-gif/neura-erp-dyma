@@ -118,10 +118,16 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
 
     if (!facturaId) {
       const detalle = `Contrato ${String(v.numero_contrato)} — cuota ${Number(c.numero)} · vence ${String(c.vencimiento)}`;
-      // IVA de la cuota de lote: se desglosa 70% exento + 30% gravado al 5% (regla
-      // fiscal de DYMA para venta de loteamientos). La limpieza NO usa este 70/30.
+      // IVA de la cuota de lote (regla de Contabilidad de DYMA). El desglose se
+      // hace sobre el NETO sin IVA, no sobre el total:
+      //   neto     = total ÷ 1,015
+      //   exento   = 70% del neto
+      //   gravado  = el resto de la cuota (base gravada al 5% + su IVA)
+      // El IVA 5% sale de la parte gravada, y Exenta + Gravada + IVA cierra exacto
+      // el total de la cuota. La limpieza NO usa este desglose.
       const totalCuota = Number(c.total ?? 0);
-      const exento = Math.round(totalCuota * 0.7);
+      const neto = Math.round(totalCuota / 1.015);
+      const exento = Math.round(neto * 0.7);
       const gravado5 = totalCuota - exento;
       const lineasCuota: LineaFacturaSimple[] = [
         { descripcion: `${detalle} — 70% exento`, total: exento, tasa: 0 as const },
