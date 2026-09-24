@@ -36,11 +36,13 @@ export interface LineaImpresa {
 
 export interface TotalesFactura {
   exentas: number;
+  /** Base imponible gravada al 5% (sin IVA). */
   gravado_5: number;
   iva_5: number;
+  /** Base imponible gravada al 10% (sin IVA). */
   gravado_10: number;
   iva_10: number;
-  /** Suma de las tres columnas: lo que el cliente paga. */
+  /** Lo que paga el cliente: exentas + bases gravadas + IVA (5% y 10%). */
   total: number;
 }
 
@@ -85,11 +87,15 @@ export function calcularTotalesFactura(items: LineaFactura[]): TotalesFactura {
     const tasa = inferirTasaIva(it.subtotal, it.iva);
     const importe = Math.round(Number(it.total) || Number(it.subtotal) + Number(it.iva) || 0);
     const impuesto = Math.round(Number(it.iva) || 0);
+    // Gravadas = BASE imponible (sin IVA), no el importe con IVA: así la factura
+    // muestra Exentas + Gravada 5% + Gravada 10% + IVA = Total, que es el corte
+    // que usa Contabilidad y el que va al libro de ventas. El total sigue siendo
+    // la suma de los importes (con IVA incluido).
     if (tasa === 10) {
-      t.gravado_10 += importe;
+      t.gravado_10 += importe - impuesto;
       t.iva_10 += impuesto;
     } else if (tasa === 5) {
-      t.gravado_5 += importe;
+      t.gravado_5 += importe - impuesto;
       t.iva_5 += impuesto;
     } else {
       t.exentas += importe;
