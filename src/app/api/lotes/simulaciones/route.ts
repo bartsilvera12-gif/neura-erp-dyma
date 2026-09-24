@@ -1,13 +1,34 @@
 import { NextResponse } from "next/server";
 import { requireLotesModuleAccess } from "@/lib/lotes/lotes-auth";
 import { errorResponse, successResponse } from "@/lib/api/response";
-import { esFrecuencia, simularPlan, type Frecuencia } from "@/lib/financiacion/plan-cuotas";
+import {
+  esFrecuencia,
+  simularPlan,
+  generarPlanManual,
+  type Frecuencia,
+  type CuotaManualInput,
+} from "@/lib/financiacion/plan-cuotas";
 import type { SimulacionGuardada } from "@/lib/financiacion/simulaciones";
 import { aSimulacionGuardada } from "@/lib/financiacion/simulaciones";
 
 export const dynamic = "force-dynamic";
 
 const FECHA_RE = /^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/;
+
+/** Normaliza las cuotas cargadas a mano del plan personalizado. */
+function leerCuotasManuales(valor: unknown): CuotaManualInput[] {
+  if (!Array.isArray(valor)) return [];
+  const out: CuotaManualInput[] = [];
+  for (const item of valor) {
+    if (!item || typeof item !== "object") continue;
+    const c = item as Record<string, unknown>;
+    out.push({
+      vencimiento: typeof c.vencimiento === "string" ? c.vencimiento.trim() : "",
+      monto: Number(c.monto),
+    });
+  }
+  return out;
+}
 
 /** GET /api/lotes/simulaciones?cliente_id=&lote_id=&estado= — historial de propuestas. */
 export async function GET(request: Request) {
@@ -90,23 +111,91 @@ export async function POST(request: Request) {
     return NextResponse.json(errorResponse("Body JSON inválido"), { status: 400 });
   }
 
-  const primerVencimiento = typeof body.primer_vencimiento === "string" ? body.primer_vencimiento.trim() : "";
+  const personalizada = body.plan_tipo === "personalizada";
+  const cuotasManuales = personalizada ? leerCuotasManuales(body.cuotas_manuales) : [];
+  const cancelacionVencimiento =
+    typeof body.cancelacion_vencimiento === "string" ? body.cancelacion_vencimiento.trim() : "";
+  const frecuencia: Frecuencia = esFrecuencia(body.frecuencia) ? body.frecuencia : "mensual";
+
+  // En el plan personalizado el "inicio" es el vencimiento de la primera cuota.
+  const primerVencimiento = personalizada
+    ? cuotasManuales[0]?.vencimiento ?? ""
+    : typeof body.primer_vencimiento === "string"
+      ? body.primer_vencimiento.trim()
+      : "";
   if (!FECHA_RE.test(primerVencimiento)) {
     return NextResponse.json(errorResponse("Fecha de inicio de las cuotas inválida"), { status: 400 });
   }
-  const frecuencia: Frecuencia = esFrecuencia(body.frecuencia) ? body.frecuencia : "mensual";
 
-  let plan;
+  // Campos que la fila guarda, calculados en el servidor para los dos tipos de plan.
+  let plan: {
+    precio_contado: number;
+    entrega_inicial: number;
+    recargo_pct: number;
+    frecuencia: Frecuencia;
+    primer_vencimiento: string;
+    modo: "por_cuota" | "por_cantidad";
+    cuota_propuesta: number | null;
+    capital: number;
+    interes_total: number;
+    monto_financiado: number;
+    cantidad_cuotas: number;
+    cuota: number;
+    cuota_final: number;
+    ultimo_vencimiento: string;
+  };
   try {
-    plan = simularPlan({
-      precioContado: Number(body.precio_contado),
-      entregaInicial: Number(body.entrega_inicial ?? 0),
-      primerVencimiento,
-      frecuencia,
-      recargo: body.recargo_pct == null ? undefined : Number(body.recargo_pct),
-      cantidadCuotas: body.cantidad_cuotas == null ? undefined : Number(body.cantidad_cuotas),
-      cuotaPropuesta: body.cuota_propuesta == null ? undefined : Number(body.cuota_propuesta),
-    });
+    if (personalizada) {
+      const base = generarPlanManual({
+        precioContado: Number(body.precio_contado),
+        entregaInicial: Number(body.entrega_inicial ?? 0),
+        cuotas: cuotasManuales,
+        cancelacionVencimiento,
+      });
+      const ultima = base.cuotas[base.cuotas.length - 1];
+      plan = {
+        precio_contado: base.precio_contado,
+        entrega_inicial: base.entrega_inicial,
+        recargo_pct: 0,
+        frecuencia,
+        primer_vencimiento: base.cuotas[0]?.vencimiento ?? primerVencimiento,
+        modo: "por_cantidad",
+        cuota_propuesta: null,
+        capital: base.capital,
+        interes_total: base.interes_total,
+        monto_financiado: base.monto_financiado,
+        cantidad_cuotas: base.cuotas.length,
+        cuota: base.cuotas[0]?.total ?? 0,
+        cuota_final: ultima?.total ?? 0,
+        ultimo_vencimiento: ultima?.vencimiento ?? primerVencimiento,
+      };
+    } else {
+      const sim = simularPlan({
+        precioContado: Number(body.precio_contado),
+        entregaInicial: Number(body.entrega_inicial ?? 0),
+        primerVencimiento,
+        frecuencia,
+        recargo: body.recargo_pct == null ? undefined : Number(body.recargo_pct),
+        cantidadCuotas: body.cantidad_cuotas == null ? undefined : Number(body.cantidad_cuotas),
+        cuotaPropuesta: body.cuota_propuesta == null ? undefined : Number(body.cuota_propuesta),
+      });
+      plan = {
+        precio_contado: sim.precio_contado,
+        entrega_inicial: sim.entrega_inicial,
+        recargo_pct: sim.recargo_pct,
+        frecuencia: sim.frecuencia,
+        primer_vencimiento: sim.primer_vencimiento,
+        modo: sim.modo,
+        cuota_propuesta: sim.cuota_propuesta,
+        capital: sim.capital,
+        interes_total: sim.interes_total,
+        monto_financiado: sim.monto_financiado,
+        cantidad_cuotas: sim.cantidad_cuotas,
+        cuota: sim.cuota,
+        cuota_final: sim.cuota_final,
+        ultimo_vencimiento: sim.ultimo_vencimiento,
+      };
+    }
   } catch (e) {
     // Los errores del motor son de negocio y ya vienen redactados para el usuario.
     return NextResponse.json(errorResponse(e instanceof Error ? e.message : "Datos inválidos"), { status: 400 });
@@ -135,6 +224,9 @@ export async function POST(request: Request) {
         cuota: plan.cuota,
         cuota_final: plan.cuota_final,
         ultimo_vencimiento: plan.ultimo_vencimiento,
+        plan_tipo: personalizada ? "personalizada" : "automatica",
+        cuotas_manuales: personalizada ? cuotasManuales : null,
+        cancelacion_vencimiento: personalizada ? cancelacionVencimiento : null,
         observacion:
           typeof body.observacion === "string" && body.observacion.trim() ? body.observacion.trim() : null,
         estado: "borrador",

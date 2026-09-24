@@ -48,6 +48,12 @@ export interface CondicionesIniciales {
   primer_vencimiento: string;
   recargo_pct: number;
   frecuencia: Frecuencia;
+  /** Tipo de plan traído del simulador. */
+  plan_tipo?: "automatica" | "personalizada";
+  /** Solo plan personalizado: cuotas cargadas a mano (sin la de cancelación). */
+  cuotas_manuales?: { vencimiento: string; monto: number }[] | null;
+  /** Solo plan personalizado: fecha de la cuota de cancelación. */
+  cancelacion_vencimiento?: string | null;
 }
 
 const inputClass =
@@ -111,12 +117,14 @@ export default function ModalVenderLote({
   const [recargo] = useState(inicial?.recargo_pct ?? RECARGO_FINANCIACION);
   const [frecuencia, setFrecuencia] = useState<Frecuencia>(inicial?.frecuencia ?? "mensual");
   // Tipo de plan: automático (amortización francesa) o personalizado (cuotas a mano).
-  const [planTipo, setPlanTipo] = useState<"automatica" | "personalizada">("automatica");
+  const [planTipo, setPlanTipo] = useState<"automatica" | "personalizada">(inicial?.plan_tipo ?? "automatica");
   // Cuotas del plan personalizado (montos limpios, sin interés). La cancelación va aparte.
-  const [cuotasManuales, setCuotasManuales] = useState<{ vencimiento: string; monto: string }[]>(
-    () => [{ vencimiento: hoyYmd(), monto: "" }]
+  const [cuotasManuales, setCuotasManuales] = useState<{ vencimiento: string; monto: string }[]>(() =>
+    inicial?.cuotas_manuales && inicial.cuotas_manuales.length > 0
+      ? inicial.cuotas_manuales.map((c) => ({ vencimiento: c.vencimiento, monto: String(c.monto) }))
+      : [{ vencimiento: hoyYmd(), monto: "" }]
   );
-  const [cancelacionVenc, setCancelacionVenc] = useState(hoyYmd());
+  const [cancelacionVenc, setCancelacionVenc] = useState(inicial?.cancelacion_vencimiento ?? hoyYmd());
   const [observacion, setObservacion] = useState("");
   const [vendedorId, setVendedorId] = useState("");
   /** En porcentaje, como lo escribe el vendedor ("3"); la API lo pasa a fracción. */

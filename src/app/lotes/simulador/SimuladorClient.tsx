@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, Check, RefreshCw, Save, Trash2, Undo2 } from "lucide-react";
+import { ArrowLeft, Check, RefreshCw, Save, Trash2, Undo2, X } from "lucide-react";
 import { fetchWithSupabaseSession } from "@/lib/api/fetch-with-supabase-session";
 import { getClientes } from "@/lib/clientes/storage";
 import SmartSearchSelect, { type SmartOption } from "@/components/ui/SmartSearchSelect";
@@ -15,6 +15,7 @@ import {
   MAX_CUOTAS,
   RECARGO_FINANCIACION,
   simularPlan,
+  generarPlanManual,
   type Frecuencia,
   type Simulacion,
 } from "@/lib/financiacion/plan-cuotas";
@@ -60,6 +61,12 @@ export default function SimuladorClient() {
   const [frecuencia, setFrecuencia] = useState<Frecuencia>("mensual");
   const [recargoPct, setRecargoPct] = useState(String(RECARGO_FINANCIACION * 100));
   const [observacion, setObservacion] = useState("");
+  // Plan automático (francés) o personalizado (cuotas a mano + cancelación).
+  const [planTipo, setPlanTipo] = useState<"automatica" | "personalizada">("automatica");
+  const [cuotasManuales, setCuotasManuales] = useState<{ vencimiento: string; monto: string }[]>(() => [
+    { vencimiento: hoyYmd(), monto: "" },
+  ]);
+  const [cancelacionVenc, setCancelacionVenc] = useState(hoyYmd());
 
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [lotes, setLotes] = useState<Lote[]>([]);
@@ -111,10 +118,44 @@ export default function SimuladorClient() {
   );
 
   const loteElegido = lotes.find((l) => l.id === loteId) ?? null;
+  const esPersonalizada = planTipo === "personalizada";
+
+  const cuotasManualesLimpias = useMemo(
+    () =>
+      cuotasManuales
+        .filter((c) => Number(c.monto) > 0)
+        .map((c) => ({ vencimiento: c.vencimiento, monto: Number(c.monto) })),
+    [cuotasManuales]
+  );
+  const financiado = Math.max(0, Math.round(Number(precio) || 0) - Math.round(Number(entrega) || 0));
+  const sumaManual = cuotasManualesLimpias.reduce((a, c) => a + c.monto, 0);
+  const saldoCancelacion = financiado - sumaManual;
 
   /** El cálculo corre en cada tecla: es la herramienta de análisis que se pide. */
   const resultado = useMemo(() => {
     try {
+      if (esPersonalizada) {
+        const base = generarPlanManual({
+          precioContado: Number(precio),
+          entregaInicial: Number(entrega),
+          cuotas: cuotasManualesLimpias,
+          cancelacionVencimiento: cancelacionVenc,
+        });
+        const ultima = base.cuotas[base.cuotas.length - 1];
+        const plan: Simulacion = {
+          ...base,
+          modo: "por_cantidad",
+          frecuencia,
+          recargo_pct: 0,
+          cantidad_cuotas: base.cuotas.length,
+          cuota: base.cuotas[0]?.total ?? 0,
+          cuota_final: ultima?.total ?? 0,
+          cuota_propuesta: null,
+          primer_vencimiento: base.cuotas[0]?.vencimiento ?? "",
+          ultimo_vencimiento: ultima?.vencimiento ?? "",
+        };
+        return { plan, error: null as string | null };
+      }
       const plan = simularPlan({
         precioContado: Number(precio),
         entregaInicial: Number(entrega),
@@ -128,7 +169,19 @@ export default function SimuladorClient() {
     } catch (e) {
       return { plan: null as Simulacion | null, error: e instanceof Error ? e.message : "Datos inválidos" };
     }
-  }, [precio, entrega, primerVencimiento, frecuencia, recargoPct, modo, cantidadCuotas, cuotaPropuesta]);
+  }, [
+    esPersonalizada,
+    precio,
+    entrega,
+    primerVencimiento,
+    frecuencia,
+    recargoPct,
+    modo,
+    cantidadCuotas,
+    cuotaPropuesta,
+    cuotasManualesLimpias,
+    cancelacionVenc,
+  ]);
 
   const p = resultado.plan;
 
@@ -148,9 +201,12 @@ export default function SimuladorClient() {
           entrega_inicial: Number(entrega),
           recargo_pct: Number(recargoPct) / 100,
           frecuencia,
-          primer_vencimiento: primerVencimiento,
+          primer_vencimiento: esPersonalizada ? cuotasManualesLimpias[0]?.vencimiento ?? "" : primerVencimiento,
           cantidad_cuotas: modo === "por_cantidad" ? Number(cantidadCuotas) : null,
           cuota_propuesta: modo === "por_cuota" ? Number(cuotaPropuesta) : null,
+          plan_tipo: planTipo,
+          cuotas_manuales: esPersonalizada ? cuotasManualesLimpias : undefined,
+          cancelacion_vencimiento: esPersonalizada ? cancelacionVenc : undefined,
           observacion: observacion.trim() || null,
         }),
       });
@@ -178,6 +234,11 @@ export default function SimuladorClient() {
     setModo(s.modo);
     if (s.modo === "por_cuota") setCuotaPropuesta(String(s.cuota_propuesta ?? 0));
     else setCantidadCuotas(String(s.cantidad_cuotas));
+    setPlanTipo(s.plan_tipo);
+    if (s.plan_tipo === "personalizada" && s.cuotas_manuales && s.cuotas_manuales.length > 0) {
+      setCuotasManuales(s.cuotas_manuales.map((c) => ({ vencimiento: c.vencimiento, monto: String(c.monto) })));
+      setCancelacionVenc(s.cancelacion_vencimiento ?? hoyYmd());
+    }
     setObservacion(s.observacion ?? "");
     setNombre(s.nombre ? `${s.nombre} (copia)` : "");
     window.scrollTo({ top: 0, behavior: "smooth" });
@@ -230,6 +291,9 @@ export default function SimuladorClient() {
         primer_vencimiento: s.primer_vencimiento,
         recargo_pct: s.recargo_pct,
         frecuencia: s.frecuencia,
+        plan_tipo: s.plan_tipo,
+        cuotas_manuales: s.cuotas_manuales,
+        cancelacion_vencimiento: s.cancelacion_vencimiento,
       },
     });
   }
@@ -323,6 +387,134 @@ export default function SimuladorClient() {
           </div>
 
           <div className="rounded-xl border border-slate-200 bg-slate-50/60 p-3">
+            <p className="mb-2 text-xs font-semibold text-slate-600">Tipo de plan</p>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => setPlanTipo("automatica")}
+                className={`rounded-lg border px-3 py-1.5 text-xs font-semibold ${
+                  !esPersonalizada
+                    ? "border-[#0EA5E9] bg-[#0EA5E9] text-white"
+                    : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+                }`}
+              >
+                Automático (sistema francés)
+              </button>
+              <button
+                type="button"
+                onClick={() => setPlanTipo("personalizada")}
+                className={`rounded-lg border px-3 py-1.5 text-xs font-semibold ${
+                  esPersonalizada
+                    ? "border-[#0EA5E9] bg-[#0EA5E9] text-white"
+                    : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+                }`}
+              >
+                Personalizado (cuotas a mano)
+              </button>
+            </div>
+          </div>
+
+          {esPersonalizada ? (
+            <div className="rounded-xl border border-slate-200 bg-slate-50/60 p-3">
+              <div className="mb-2 flex items-center justify-between">
+                <p className="text-xs font-semibold text-slate-600">Cuotas del plan</p>
+                <span className="text-[10px] text-slate-400">Montos sin interés</span>
+              </div>
+              <div className="space-y-2">
+                {cuotasManuales.map((c, i) => (
+                  <div key={i} className="flex items-center gap-2">
+                    <span className="w-5 shrink-0 text-center text-xs font-semibold text-slate-500">{i + 1}</span>
+                    <div className="flex-1">
+                      <FechaSelect
+                        value={c.vencimiento}
+                        onChange={(e) =>
+                          setCuotasManuales((prev) =>
+                            prev.map((x, j) => (j === i ? { ...x, vencimiento: e.target.value } : x))
+                          )
+                        }
+                        className={inputClass}
+                      />
+                    </div>
+                    <div className="flex-1">
+                      <MontoInput
+                        value={c.monto}
+                        onChange={(n) =>
+                          setCuotasManuales((prev) => prev.map((x, j) => (j === i ? { ...x, monto: String(n) } : x)))
+                        }
+                        decimals={false}
+                        onFocus={(e) => e.currentTarget.select()}
+                        className={inputClass}
+                      />
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setCuotasManuales((prev) => (prev.length > 1 ? prev.filter((_, j) => j !== i) : prev))
+                      }
+                      disabled={cuotasManuales.length <= 1}
+                      className="shrink-0 rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-rose-600 disabled:opacity-30"
+                      aria-label="Quitar cuota"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+              <button
+                type="button"
+                onClick={() =>
+                  setCuotasManuales((prev) => [
+                    ...prev,
+                    { vencimiento: prev[prev.length - 1]?.vencimiento ?? hoyYmd(), monto: "" },
+                  ])
+                }
+                className="mt-2 text-[11px] font-semibold text-[#0EA5E9] hover:underline"
+              >
+                + Agregar cuota
+              </button>
+
+              <div className="mt-3 rounded-xl border border-slate-200 bg-white p-3">
+                <div className="flex items-center justify-between gap-2">
+                  <div>
+                    <p className="text-xs font-semibold text-slate-700">Cuota final — Cancelación de saldo</p>
+                    <p className="text-[10px] text-slate-400">El sistema le asigna el saldo restante.</p>
+                  </div>
+                  <p
+                    className={`text-sm font-bold tabular-nums ${
+                      saldoCancelacion > 0 ? "text-slate-900" : "text-rose-600"
+                    }`}
+                  >
+                    {gs(Math.max(0, saldoCancelacion))}
+                  </p>
+                </div>
+                <div className="mt-2">
+                  <label className={labelClass}>Vencimiento de la cancelación</label>
+                  <FechaSelect
+                    value={cancelacionVenc}
+                    onChange={(e) => setCancelacionVenc(e.target.value)}
+                    className={inputClass}
+                  />
+                </div>
+              </div>
+
+              <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-slate-500">
+                <span>
+                  Saldo a financiar: <b className="tabular-nums text-slate-700">{gs(financiado)}</b>
+                </span>
+                <span>
+                  Suma de cuotas: <b className="tabular-nums text-slate-700">{gs(sumaManual)}</b>
+                </span>
+                <span>
+                  Va a la cancelación:{" "}
+                  <b className={`tabular-nums ${saldoCancelacion > 0 ? "text-slate-700" : "text-rose-600"}`}>
+                    {gs(saldoCancelacion)}
+                  </b>
+                </span>
+              </div>
+            </div>
+          ) : (
+            <>
+          <div className="rounded-xl border border-slate-200 bg-slate-50/60 p-3">
             <p className="mb-2 text-xs font-semibold text-slate-600">¿Qué dato conocés?</p>
             <div className="flex flex-wrap gap-2">
               <button
@@ -412,6 +604,8 @@ export default function SimuladorClient() {
               </p>
             </div>
           </div>
+            </>
+          )}
 
           <div className="grid gap-3 sm:grid-cols-2">
             <div>
@@ -474,10 +668,14 @@ export default function SimuladorClient() {
 
               <div className="rounded-2xl border-2 border-[#0EA5E9] bg-sky-50/50 p-4">
                 <p className="text-3xl font-bold tabular-nums text-[#0EA5E9]">{p.cantidad_cuotas}</p>
-                <p className="text-xs font-semibold text-slate-600">
-                  cuotas {FRECUENCIAS[p.frecuencia].label.toLowerCase()}es de{" "}
-                  <span className="tabular-nums">{gs(p.cuota)}</span>
-                </p>
+                {esPersonalizada ? (
+                  <p className="text-xs font-semibold text-slate-600">cuotas personalizadas (incluida la cancelación)</p>
+                ) : (
+                  <p className="text-xs font-semibold text-slate-600">
+                    cuotas {FRECUENCIAS[p.frecuencia].label.toLowerCase()}es de{" "}
+                    <span className="tabular-nums">{gs(p.cuota)}</span>
+                  </p>
+                )}
                 {p.interes_total > 0 ? (
                   <p className="mt-0.5 text-[11px] text-slate-500">
                     Cuota exacta (sistema francés):{" "}
@@ -518,7 +716,14 @@ export default function SimuladorClient() {
                   <tbody className="divide-y divide-slate-100">
                     {p.cuotas.map((c) => (
                       <tr key={c.numero}>
-                        <td className="px-3 py-1.5 text-slate-600">{c.numero}</td>
+                        <td className="px-3 py-1.5 text-slate-600">
+                          {c.numero}
+                          {esPersonalizada && c.numero === p.cuotas.length ? (
+                            <span className="ml-1 rounded bg-amber-100 px-1 py-0.5 text-[9px] font-semibold text-amber-700">
+                              Cancelación
+                            </span>
+                          ) : null}
+                        </td>
                         <td className="px-3 py-1.5 tabular-nums text-slate-600">{fmtFecha(c.vencimiento)}</td>
                         <td className="px-3 py-1.5 text-right tabular-nums text-slate-600">{gs(c.saldo_inicial)}</td>
                         <td className="px-3 py-1.5 text-right tabular-nums text-slate-600">{gs(c.interes)}</td>

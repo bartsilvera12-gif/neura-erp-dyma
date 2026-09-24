@@ -8,6 +8,15 @@ export const ESTADO_SIMULACION_UI: Record<EstadoSimulacion, { label: string; chi
   aprobada: { label: "Aprobada", chip: "border-emerald-200 bg-emerald-50 text-emerald-700" },
 };
 
+/** Tipo de plan de una propuesta guardada. */
+export type PlanTipoSimulacion = "automatica" | "personalizada";
+
+/** Una cuota cargada a mano en un plan personalizado (sin la de cancelación). */
+export interface CuotaManualGuardada {
+  vencimiento: string;
+  monto: number;
+}
+
 /** Una propuesta guardada en el historial, con el resultado tal como se calculó ese día. */
 export interface SimulacionGuardada {
   id: string;
@@ -31,6 +40,12 @@ export interface SimulacionGuardada {
   observacion: string | null;
   estado: EstadoSimulacion;
   created_at: string;
+  /** 'automatica' (default) o 'personalizada' (cuotas cargadas a mano). */
+  plan_tipo: PlanTipoSimulacion;
+  /** Solo plan personalizado: las cuotas cargadas a mano, sin la de cancelación. */
+  cuotas_manuales: CuotaManualGuardada[] | null;
+  /** Solo plan personalizado: fecha de la cuota final de cancelación. */
+  cancelacion_vencimiento: string | null;
   /** Etiquetas resueltas en el listado; no vienen de la tabla. */
   cliente_label?: string | null;
   lote_label?: string | null;
@@ -61,6 +76,14 @@ export function aSimulacionGuardada(row: Record<string, unknown>): SimulacionGua
     observacion: (row.observacion as string) ?? null,
     estado: (row.estado as EstadoSimulacion) ?? "borrador",
     created_at: String(row.created_at ?? ""),
+    plan_tipo: row.plan_tipo === "personalizada" ? "personalizada" : "automatica",
+    cuotas_manuales: Array.isArray(row.cuotas_manuales)
+      ? (row.cuotas_manuales as unknown[]).map((c) => {
+          const o = (c ?? {}) as Record<string, unknown>;
+          return { vencimiento: ymd(o.vencimiento), monto: Number(o.monto ?? 0) };
+        })
+      : null,
+    cancelacion_vencimiento: row.cancelacion_vencimiento ? ymd(row.cancelacion_vencimiento) : null,
     cliente_label: null,
     lote_label: null,
   };
