@@ -125,6 +125,11 @@ export default function ModalVenderLote({
       : [{ vencimiento: hoyYmd(), monto: "" }]
   );
   const [cancelacionVenc, setCancelacionVenc] = useState(inicial?.cancelacion_vencimiento ?? hoyYmd());
+  // ¿Se agrega una cuota final que se lleva el saldo restante? Opcional: si se
+  // desactiva, las cuotas cargadas tienen que sumar exactamente el financiado.
+  const [conCancelacion, setConCancelacion] = useState(
+    inicial?.plan_tipo === "personalizada" ? Boolean(inicial?.cancelacion_vencimiento) : true
+  );
   const [observacion, setObservacion] = useState("");
   const [vendedorId, setVendedorId] = useState("");
   /** En porcentaje, como lo escribe el vendedor ("3"); la API lo pasa a fracción. */
@@ -193,7 +198,7 @@ export default function ModalVenderLote({
               precioContado: Number(precioContado),
               entregaInicial: Number(entrega),
               cuotas: cuotasManualesLimpias,
-              cancelacionVencimiento: cancelacionVenc,
+              cancelacionVencimiento: conCancelacion ? cancelacionVenc : undefined,
             })
           : generarPlanCuotas({
               precioContado: Number(precioContado),
@@ -218,6 +223,7 @@ export default function ModalVenderLote({
     frecuencia,
     cuotasManualesLimpias,
     cancelacionVenc,
+    conCancelacion,
   ]);
 
   const faltaConyuge = tipoElegido?.requiere_conyuge === true && !conyuge.nombre.trim();
@@ -251,7 +257,7 @@ export default function ModalVenderLote({
           frecuencia,
           plan_tipo: planTipo,
           cuotas_manuales: esPersonalizada ? cuotasManualesLimpias : undefined,
-          cancelacion_vencimiento: esPersonalizada ? cancelacionVenc : undefined,
+          cancelacion_vencimiento: esPersonalizada && conCancelacion ? cancelacionVenc : undefined,
           simulacion_id: inicial?.simulacion_id ?? null,
           observacion,
           vendedor_id: vendedorId || null,
@@ -513,32 +519,44 @@ export default function ModalVenderLote({
                 + Agregar cuota
               </button>
 
-              <div className="mt-3 rounded-xl border border-slate-200 bg-slate-50/60 p-3">
-                <div className="flex items-center justify-between gap-2">
-                  <div>
-                    <p className="text-xs font-semibold text-slate-700">Cuota final — Cancelación de saldo</p>
-                    <p className="text-[10px] text-slate-400">El sistema le asigna el saldo restante.</p>
+              <label className="mt-3 flex items-center gap-2 text-xs font-medium text-slate-600">
+                <input
+                  type="checkbox"
+                  checked={conCancelacion}
+                  onChange={(e) => setConCancelacion(e.target.checked)}
+                  className="h-3.5 w-3.5"
+                />
+                Agregar cuota final de cancelación (se lleva el saldo restante)
+              </label>
+
+              {conCancelacion ? (
+                <div className="mt-2 rounded-xl border border-slate-200 bg-slate-50/60 p-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <div>
+                      <p className="text-xs font-semibold text-slate-700">Cuota final — Cancelación de saldo</p>
+                      <p className="text-[10px] text-slate-400">El sistema le asigna el saldo restante.</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">Importe</p>
+                      <p
+                        className={`text-sm font-bold tabular-nums ${
+                          saldoCancelacion > 0 ? "text-slate-900" : "text-rose-600"
+                        }`}
+                      >
+                        {fmt(Math.max(0, saldoCancelacion), moneda)}
+                      </p>
+                    </div>
                   </div>
-                  <div className="text-right">
-                    <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">Importe</p>
-                    <p
-                      className={`text-sm font-bold tabular-nums ${
-                        saldoCancelacion > 0 ? "text-slate-900" : "text-rose-600"
-                      }`}
-                    >
-                      {fmt(Math.max(0, saldoCancelacion), moneda)}
-                    </p>
+                  <div className="mt-2">
+                    <label className={labelClass}>Vencimiento de la cancelación</label>
+                    <FechaSelect
+                      value={cancelacionVenc}
+                      onChange={(e) => setCancelacionVenc(e.target.value)}
+                      className={inputClass}
+                    />
                   </div>
                 </div>
-                <div className="mt-2">
-                  <label className={labelClass}>Vencimiento de la cancelación</label>
-                  <FechaSelect
-                    value={cancelacionVenc}
-                    onChange={(e) => setCancelacionVenc(e.target.value)}
-                    className={inputClass}
-                  />
-                </div>
-              </div>
+              ) : null}
 
               <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-slate-500">
                 <span>
@@ -547,12 +565,22 @@ export default function ModalVenderLote({
                 <span>
                   Suma de cuotas: <b className="tabular-nums text-slate-700">{fmt(sumaManual, moneda)}</b>
                 </span>
-                <span>
-                  Va a la cancelación:{" "}
-                  <b className={`tabular-nums ${saldoCancelacion > 0 ? "text-slate-700" : "text-rose-600"}`}>
-                    {fmt(saldoCancelacion, moneda)}
-                  </b>
-                </span>
+                {conCancelacion ? (
+                  <span>
+                    Va a la cancelación:{" "}
+                    <b className={`tabular-nums ${saldoCancelacion > 0 ? "text-slate-700" : "text-rose-600"}`}>
+                      {fmt(saldoCancelacion, moneda)}
+                    </b>
+                  </span>
+                ) : (
+                  <span>
+                    Diferencia:{" "}
+                    <b className={`tabular-nums ${saldoCancelacion === 0 ? "text-emerald-600" : "text-rose-600"}`}>
+                      {fmt(saldoCancelacion, moneda)}
+                    </b>
+                    {saldoCancelacion !== 0 ? " — debe quedar en 0" : ""}
+                  </span>
+                )}
               </div>
             </div>
           ) : (

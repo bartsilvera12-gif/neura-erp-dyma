@@ -291,10 +291,17 @@ export interface CuotaManualInput {
 export function generarPlanManual(input: {
   precioContado: number;
   entregaInicial?: number;
-  /** Cuotas cargadas a mano, en orden. La cancelación va aparte. */
+  /** Cuotas cargadas a mano, en orden. */
   cuotas: CuotaManualInput[];
-  /** Vencimiento de la cuota final de cancelación (recibe el saldo restante). */
-  cancelacionVencimiento: string;
+  /**
+   * Vencimiento de la cuota final de cancelación. OPCIONAL:
+   * - Si se pasa una fecha, se agrega una cuota final que se lleva el saldo
+   *   restante (la suma de las cuotas cargadas debe ser MENOR al financiado).
+   * - Si se omite (vacío), NO se agrega cuota final: las cuotas cargadas deben
+   *   sumar EXACTAMENTE el financiado. Así el vendedor controla toda la
+   *   distribución sin que el sistema imponga una cuota de cierre.
+   */
+  cancelacionVencimiento?: string;
 }): PlanCuotas {
   const precioContado = Math.round(input.precioContado);
   const entrega = Math.round(input.entregaInicial ?? 0);
@@ -309,14 +316,17 @@ export function generarPlanManual(input: {
 
   const capital = precioContado - entrega; // saldo a financiar, sin interés
 
+  const conCancelacion =
+    typeof input.cancelacionVencimiento === "string" && input.cancelacionVencimiento.trim().length > 0;
+
   const manuales = input.cuotas ?? [];
   if (manuales.length < 1) {
-    throw new Error("Cargá al menos una cuota antes de la cuota de cancelación");
+    throw new Error("Cargá al menos una cuota.");
   }
-  if (manuales.length + 1 > MAX_CUOTAS) {
+  if (manuales.length + (conCancelacion ? 1 : 0) > MAX_CUOTAS) {
     throw new Error(`El plan no puede tener más de ${MAX_CUOTAS} cuotas.`);
   }
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(input.cancelacionVencimiento))) {
+  if (conCancelacion && !/^\d{4}-\d{2}-\d{2}$/.test(String(input.cancelacionVencimiento))) {
     throw new Error("La fecha de la cuota de cancelación es inválida");
   }
 
@@ -334,13 +344,19 @@ export function generarPlanManual(input: {
     suma += monto;
   });
 
-  if (suma >= capital) {
+  if (conCancelacion) {
+    if (suma >= capital) {
+      throw new Error(
+        `La suma de las cuotas (${suma.toLocaleString("es-PY")}) debe ser menor al saldo a financiar ` +
+          `(${capital.toLocaleString("es-PY")}) para dejar importe a la cuota de cancelación.`
+      );
+    }
+  } else if (suma !== capital) {
     throw new Error(
-      `La suma de las cuotas (${suma.toLocaleString("es-PY")}) debe ser menor al saldo a financiar ` +
-        `(${capital.toLocaleString("es-PY")}) para dejar importe a la cuota de cancelación.`
+      `La suma de las cuotas (${suma.toLocaleString("es-PY")}) debe ser igual al saldo a financiar ` +
+        `(${capital.toLocaleString("es-PY")}). Ajustá los montos o agregá la cuota de cancelación.`
     );
   }
-  const cancelacion = capital - suma; // > 0 por la validación anterior
 
   const cuotas: Cuota[] = [];
   let saldo = capital;
@@ -357,16 +373,19 @@ export function generarPlanManual(input: {
     });
     saldo = saldoFin;
   });
-  // Cuota final de cancelación: se lleva todo el saldo restante.
-  cuotas.push({
-    numero: montos.length + 1,
-    vencimiento: input.cancelacionVencimiento,
-    saldo_inicial: saldo,
-    interes: 0,
-    capital: cancelacion,
-    total: cancelacion,
-    saldo_final: 0,
-  });
+  // Cuota final de cancelación (opcional): se lleva todo el saldo restante.
+  if (conCancelacion) {
+    const cancelacion = capital - suma; // > 0 por la validación anterior
+    cuotas.push({
+      numero: montos.length + 1,
+      vencimiento: String(input.cancelacionVencimiento),
+      saldo_inicial: saldo,
+      interes: 0,
+      capital: cancelacion,
+      total: cancelacion,
+      saldo_final: 0,
+    });
+  }
 
   return {
     precio_contado: precioContado,

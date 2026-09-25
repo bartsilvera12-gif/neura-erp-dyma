@@ -67,6 +67,8 @@ export default function SimuladorClient() {
     { vencimiento: hoyYmd(), monto: "" },
   ]);
   const [cancelacionVenc, setCancelacionVenc] = useState(hoyYmd());
+  // Cuota final de cancelación opcional (si se apaga, las cuotas deben sumar el financiado).
+  const [conCancelacion, setConCancelacion] = useState(true);
 
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [lotes, setLotes] = useState<Lote[]>([]);
@@ -139,7 +141,7 @@ export default function SimuladorClient() {
           precioContado: Number(precio),
           entregaInicial: Number(entrega),
           cuotas: cuotasManualesLimpias,
-          cancelacionVencimiento: cancelacionVenc,
+          cancelacionVencimiento: conCancelacion ? cancelacionVenc : undefined,
         });
         const ultima = base.cuotas[base.cuotas.length - 1];
         const plan: Simulacion = {
@@ -181,6 +183,7 @@ export default function SimuladorClient() {
     cuotaPropuesta,
     cuotasManualesLimpias,
     cancelacionVenc,
+    conCancelacion,
   ]);
 
   const p = resultado.plan;
@@ -206,7 +209,7 @@ export default function SimuladorClient() {
           cuota_propuesta: modo === "por_cuota" ? Number(cuotaPropuesta) : null,
           plan_tipo: planTipo,
           cuotas_manuales: esPersonalizada ? cuotasManualesLimpias : undefined,
-          cancelacion_vencimiento: esPersonalizada ? cancelacionVenc : undefined,
+          cancelacion_vencimiento: esPersonalizada && conCancelacion ? cancelacionVenc : undefined,
           observacion: observacion.trim() || null,
         }),
       });
@@ -238,6 +241,7 @@ export default function SimuladorClient() {
     if (s.plan_tipo === "personalizada" && s.cuotas_manuales && s.cuotas_manuales.length > 0) {
       setCuotasManuales(s.cuotas_manuales.map((c) => ({ vencimiento: c.vencimiento, monto: String(c.monto) })));
       setCancelacionVenc(s.cancelacion_vencimiento ?? hoyYmd());
+      setConCancelacion(Boolean(s.cancelacion_vencimiento));
     }
     setObservacion(s.observacion ?? "");
     setNombre(s.nombre ? `${s.nombre} (copia)` : "");
@@ -473,29 +477,41 @@ export default function SimuladorClient() {
                 + Agregar cuota
               </button>
 
-              <div className="mt-3 rounded-xl border border-slate-200 bg-white p-3">
-                <div className="flex items-center justify-between gap-2">
-                  <div>
-                    <p className="text-xs font-semibold text-slate-700">Cuota final — Cancelación de saldo</p>
-                    <p className="text-[10px] text-slate-400">El sistema le asigna el saldo restante.</p>
+              <label className="mt-3 flex items-center gap-2 text-xs font-medium text-slate-600">
+                <input
+                  type="checkbox"
+                  checked={conCancelacion}
+                  onChange={(e) => setConCancelacion(e.target.checked)}
+                  className="h-3.5 w-3.5"
+                />
+                Agregar cuota final de cancelación (se lleva el saldo restante)
+              </label>
+
+              {conCancelacion ? (
+                <div className="mt-2 rounded-xl border border-slate-200 bg-white p-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <div>
+                      <p className="text-xs font-semibold text-slate-700">Cuota final — Cancelación de saldo</p>
+                      <p className="text-[10px] text-slate-400">El sistema le asigna el saldo restante.</p>
+                    </div>
+                    <p
+                      className={`text-sm font-bold tabular-nums ${
+                        saldoCancelacion > 0 ? "text-slate-900" : "text-rose-600"
+                      }`}
+                    >
+                      {gs(Math.max(0, saldoCancelacion))}
+                    </p>
                   </div>
-                  <p
-                    className={`text-sm font-bold tabular-nums ${
-                      saldoCancelacion > 0 ? "text-slate-900" : "text-rose-600"
-                    }`}
-                  >
-                    {gs(Math.max(0, saldoCancelacion))}
-                  </p>
+                  <div className="mt-2">
+                    <label className={labelClass}>Vencimiento de la cancelación</label>
+                    <FechaSelect
+                      value={cancelacionVenc}
+                      onChange={(e) => setCancelacionVenc(e.target.value)}
+                      className={inputClass}
+                    />
+                  </div>
                 </div>
-                <div className="mt-2">
-                  <label className={labelClass}>Vencimiento de la cancelación</label>
-                  <FechaSelect
-                    value={cancelacionVenc}
-                    onChange={(e) => setCancelacionVenc(e.target.value)}
-                    className={inputClass}
-                  />
-                </div>
-              </div>
+              ) : null}
 
               <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-slate-500">
                 <span>
@@ -504,12 +520,22 @@ export default function SimuladorClient() {
                 <span>
                   Suma de cuotas: <b className="tabular-nums text-slate-700">{gs(sumaManual)}</b>
                 </span>
-                <span>
-                  Va a la cancelación:{" "}
-                  <b className={`tabular-nums ${saldoCancelacion > 0 ? "text-slate-700" : "text-rose-600"}`}>
-                    {gs(saldoCancelacion)}
-                  </b>
-                </span>
+                {conCancelacion ? (
+                  <span>
+                    Va a la cancelación:{" "}
+                    <b className={`tabular-nums ${saldoCancelacion > 0 ? "text-slate-700" : "text-rose-600"}`}>
+                      {gs(saldoCancelacion)}
+                    </b>
+                  </span>
+                ) : (
+                  <span>
+                    Diferencia:{" "}
+                    <b className={`tabular-nums ${saldoCancelacion === 0 ? "text-emerald-600" : "text-rose-600"}`}>
+                      {gs(saldoCancelacion)}
+                    </b>
+                    {saldoCancelacion !== 0 ? " — debe quedar en 0" : ""}
+                  </span>
+                )}
               </div>
             </div>
           ) : (

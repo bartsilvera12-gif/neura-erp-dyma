@@ -226,7 +226,7 @@ export async function POST(request: Request) {
         ultimo_vencimiento: plan.ultimo_vencimiento,
         plan_tipo: personalizada ? "personalizada" : "automatica",
         cuotas_manuales: personalizada ? cuotasManuales : null,
-        cancelacion_vencimiento: personalizada ? cancelacionVencimiento : null,
+        cancelacion_vencimiento: personalizada && cancelacionVencimiento ? cancelacionVencimiento : null,
         observacion:
           typeof body.observacion === "string" && body.observacion.trim() ? body.observacion.trim() : null,
         estado: "borrador",
