@@ -40,6 +40,7 @@ export default function ContratoClient({ ventaId }: { ventaId: string }) {
   const [error, setError] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [cobrando, setCobrando] = useState<CuotaVenta | null>(null);
+  const [reprogramando, setReprogramando] = useState<CuotaVenta | null>(null);
 
   const showToast = useCallback((m: string) => {
     setToast(m);
@@ -284,13 +285,23 @@ export default function ContratoClient({ ventaId }: { ventaId: string }) {
                   </td>
                   <td className="px-3 py-2.5 text-right print:hidden">
                     {c.estado === "pendiente" && data.estado === "vigente" ? (
-                      <button
-                        type="button"
-                        onClick={() => setCobrando(c)}
-                        className="rounded-lg bg-[#0EA5E9] px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-[#0284C7]"
-                      >
-                        Cobrar
-                      </button>
+                      <div className="flex items-center justify-end gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => setReprogramando(c)}
+                          title="Reprogramar el vencimiento de esta cuota"
+                          className="rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-semibold text-slate-600 hover:bg-slate-50"
+                        >
+                          Editar fecha
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setCobrando(c)}
+                          className="rounded-lg bg-[#0EA5E9] px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-[#0284C7]"
+                        >
+                          Cobrar
+                        </button>
+                      </div>
                     ) : null}
                   </td>
                 </tr>
@@ -313,6 +324,18 @@ export default function ContratoClient({ ventaId }: { ventaId: string }) {
           onCancel={() => setCobrando(null)}
           onCobrado={async (msg) => {
             setCobrando(null);
+            showToast(msg);
+            await load();
+          }}
+        />
+      ) : null}
+
+      {reprogramando ? (
+        <ModalReprogramar
+          cuota={reprogramando}
+          onCancel={() => setReprogramando(null)}
+          onGuardado={async (msg) => {
+            setReprogramando(null);
             showToast(msg);
             await load();
           }}
@@ -522,6 +545,98 @@ function ModalCobrar({
             className="rounded-xl bg-[#0EA5E9] px-3.5 py-2 text-xs font-semibold text-white hover:bg-[#0284C7] disabled:opacity-50"
           >
             {guardando ? "Registrando…" : "Registrar cobro"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Reprograma el vencimiento de una sola cuota, sin tocar el resto del plan.
+ * El atraso y la mora se recalculan solos con la fecha nueva al recargar.
+ */
+function ModalReprogramar({
+  cuota,
+  onCancel,
+  onGuardado,
+}: {
+  cuota: CuotaVenta;
+  onCancel: () => void;
+  onGuardado: (msg: string) => void | Promise<void>;
+}) {
+  const actual = cuota.vencimiento.slice(0, 10);
+  const [fecha, setFecha] = useState(actual);
+  const [guardando, setGuardando] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const sinCambio = fecha === actual;
+
+  async function guardar() {
+    setErr(null);
+    setGuardando(true);
+    try {
+      const res = await fetchWithSupabaseSession(`/api/lotes/cuotas/${encodeURIComponent(cuota.id)}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ vencimiento: fecha }),
+      });
+      const json = (await res.json()) as { success?: boolean; error?: string };
+      if (!res.ok || json.success !== true) throw new Error(json.error ?? `Error ${res.status}`);
+      await onGuardado(`Cuota ${cuota.numero} reprogramada al ${fmtFecha(fecha)}.`);
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "No se pudo reprogramar la cuota");
+    } finally {
+      setGuardando(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/50 p-4" onClick={onCancel}>
+      <div
+        className="w-full max-w-sm rounded-2xl border border-slate-200 bg-white p-5 shadow-xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h3 className="text-base font-semibold text-slate-900">Reprogramar cuota {cuota.numero}</h3>
+            <p className="mt-0.5 text-[11px] text-slate-500">
+              Cambia solo la fecha de esta cuota. El atraso y la mora se recalculan con la nueva fecha.
+            </p>
+          </div>
+          <button type="button" onClick={onCancel} className="rounded-lg p-1 text-slate-400 hover:bg-slate-100">
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+
+        <div className="mt-4 grid gap-3">
+          <div>
+            <label className={labelClass}>Vence actualmente</label>
+            <p className="text-sm font-semibold text-slate-700">{fmtFecha(cuota.vencimiento)}</p>
+          </div>
+          <div>
+            <label className={labelClass}>Nuevo vencimiento</label>
+            <FechaSelect value={fecha} onChange={(e) => setFecha(e.target.value)} className={inputClass} />
+          </div>
+        </div>
+
+        {err ? <p className="mt-3 text-xs text-rose-600">{err}</p> : null}
+
+        <div className="mt-4 flex justify-end gap-2">
+          <button
+            type="button"
+            onClick={onCancel}
+            disabled={guardando}
+            className="rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-50"
+          >
+            Cancelar
+          </button>
+          <button
+            type="button"
+            onClick={() => void guardar()}
+            disabled={guardando || sinCambio}
+            className="rounded-xl bg-[#0EA5E9] px-3.5 py-2 text-xs font-semibold text-white hover:bg-[#0284C7] disabled:opacity-50"
+          >
+            {guardando ? "Guardando…" : "Guardar"}
           </button>
         </div>
       </div>
