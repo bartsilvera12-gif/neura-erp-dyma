@@ -16,6 +16,7 @@ import {
   RECARGO_FINANCIACION,
   simularPlan,
   generarPlanManual,
+  diasEntre,
   type Frecuencia,
   type Simulacion,
 } from "@/lib/financiacion/plan-cuotas";
@@ -132,6 +133,14 @@ export default function SimuladorClient() {
   const financiado = Math.max(0, Math.round(Number(precio) || 0) - Math.round(Number(entrega) || 0));
   const sumaManual = cuotasManualesLimpias.reduce((a, c) => a + c.monto, 0);
   const saldoCancelacion = financiado - sumaManual;
+  // Recargo por el plazo (referencia: hoy → cancelación); lo absorbe la cancelación.
+  const recargoTasaSim = Number(recargoPct) / 100;
+  const aniosPlazoSim =
+    conCancelacion && /^\d{4}-\d{2}-\d{2}$/.test(cancelacionVenc)
+      ? Math.max(0, diasEntre(hoyYmd(), cancelacionVenc)) / 365
+      : 0;
+  const recargoMonto = conCancelacion ? Math.round(financiado * recargoTasaSim * aniosPlazoSim) : 0;
+  const cancelacionImporte = saldoCancelacion + recargoMonto;
 
   /** El cálculo corre en cada tecla: es la herramienta de análisis que se pide. */
   const resultado = useMemo(() => {
@@ -142,13 +151,15 @@ export default function SimuladorClient() {
           entregaInicial: Number(entrega),
           cuotas: cuotasManualesLimpias,
           cancelacionVencimiento: conCancelacion ? cancelacionVenc : undefined,
+          fechaVenta: hoyYmd(),
+          recargo: recargoTasaSim,
         });
         const ultima = base.cuotas[base.cuotas.length - 1];
         const plan: Simulacion = {
           ...base,
           modo: "por_cantidad",
           frecuencia,
-          recargo_pct: 0,
+          recargo_pct: recargoTasaSim,
           cantidad_cuotas: base.cuotas.length,
           cuota: base.cuotas[0]?.total ?? 0,
           cuota_final: ultima?.total ?? 0,
@@ -184,6 +195,7 @@ export default function SimuladorClient() {
     cuotasManualesLimpias,
     cancelacionVenc,
     conCancelacion,
+    recargoTasaSim,
   ]);
 
   const p = resultado.plan;
@@ -492,14 +504,16 @@ export default function SimuladorClient() {
                   <div className="flex items-center justify-between gap-2">
                     <div>
                       <p className="text-xs font-semibold text-slate-700">Cuota final — Cancelación de saldo</p>
-                      <p className="text-[10px] text-slate-400">El sistema le asigna el saldo restante.</p>
+                      <p className="text-[10px] text-slate-400">
+                        Saldo restante {recargoMonto > 0 ? "+ recargo del plazo" : ""}.
+                      </p>
                     </div>
                     <p
                       className={`text-sm font-bold tabular-nums ${
-                        saldoCancelacion > 0 ? "text-slate-900" : "text-rose-600"
+                        cancelacionImporte > 0 ? "text-slate-900" : "text-rose-600"
                       }`}
                     >
-                      {gs(Math.max(0, saldoCancelacion))}
+                      {gs(Math.max(0, cancelacionImporte))}
                     </p>
                   </div>
                   <div className="mt-2">
@@ -520,11 +534,16 @@ export default function SimuladorClient() {
                 <span>
                   Suma de cuotas: <b className="tabular-nums text-slate-700">{gs(sumaManual)}</b>
                 </span>
+                {conCancelacion && recargoMonto > 0 ? (
+                  <span>
+                    Recargo del plazo: <b className="tabular-nums text-slate-700">{gs(recargoMonto)}</b>
+                  </span>
+                ) : null}
                 {conCancelacion ? (
                   <span>
                     Va a la cancelación:{" "}
-                    <b className={`tabular-nums ${saldoCancelacion > 0 ? "text-slate-700" : "text-rose-600"}`}>
-                      {gs(saldoCancelacion)}
+                    <b className={`tabular-nums ${cancelacionImporte > 0 ? "text-slate-700" : "text-rose-600"}`}>
+                      {gs(cancelacionImporte)}
                     </b>
                   </span>
                 ) : (

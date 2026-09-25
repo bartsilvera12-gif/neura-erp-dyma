@@ -302,6 +302,13 @@ export function generarPlanManual(input: {
    *   distribución sin que el sistema imponga una cuota de cierre.
    */
   cancelacionVencimiento?: string;
+  /**
+   * Fecha de la venta (YYYY-MM-DD). Se usa para prorratear el recargo por el
+   * plazo del plan (de la venta a la cuota de cancelación). Sin ella, no hay recargo.
+   */
+  fechaVenta?: string;
+  /** Tasa anual de recargo (por defecto 15%). El recargo lo absorbe la cuota de cancelación. */
+  recargo?: number;
 }): PlanCuotas {
   const precioContado = Math.round(input.precioContado);
   const entrega = Math.round(input.entregaInicial ?? 0);
@@ -358,6 +365,23 @@ export function generarPlanManual(input: {
     );
   }
 
+  // Recargo por financiación: 15% anual (o el que se pase) prorrateado por el
+  // plazo del plan, de la venta a la cuota de cancelación. Solo aplica cuando hay
+  // cuota de cancelación, porque es la que absorbe el interés; sin ella las cuotas
+  // son capital puro y deben cerrar exactas.
+  const tasaAnual = input.recargo ?? RECARGO_FINANCIACION;
+  let interesTotal = 0;
+  if (
+    conCancelacion &&
+    tasaAnual > 0 &&
+    typeof input.fechaVenta === "string" &&
+    /^\d{4}-\d{2}-\d{2}$/.test(input.fechaVenta)
+  ) {
+    const anios = Math.max(0, diasEntre(input.fechaVenta, String(input.cancelacionVencimiento))) / 365;
+    interesTotal = Math.round(capital * tasaAnual * anios);
+  }
+  const montoFinanciado = capital + interesTotal;
+
   const cuotas: Cuota[] = [];
   let saldo = capital;
   montos.forEach((monto, k) => {
@@ -373,16 +397,17 @@ export function generarPlanManual(input: {
     });
     saldo = saldoFin;
   });
-  // Cuota final de cancelación (opcional): se lleva todo el saldo restante.
+  // Cuota final de cancelación (opcional): se lleva el capital restante MÁS todo
+  // el recargo del plan.
   if (conCancelacion) {
-    const cancelacion = capital - suma; // > 0 por la validación anterior
+    const capitalCancelacion = capital - suma; // > 0 por la validación anterior
     cuotas.push({
       numero: montos.length + 1,
       vencimiento: String(input.cancelacionVencimiento),
       saldo_inicial: saldo,
-      interes: 0,
-      capital: cancelacion,
-      total: cancelacion,
+      interes: interesTotal,
+      capital: capitalCancelacion,
+      total: capitalCancelacion + interesTotal,
       saldo_final: 0,
     });
   }
@@ -392,9 +417,9 @@ export function generarPlanManual(input: {
     entrega_inicial: entrega,
     capital,
     cuota_exacta: 0,
-    interes_total: 0,
-    monto_financiado: capital, // sin interés: financiado = capital
-    total_operacion: entrega + capital,
+    interes_total: interesTotal,
+    monto_financiado: montoFinanciado,
+    total_operacion: entrega + montoFinanciado,
     cuotas,
   };
 }

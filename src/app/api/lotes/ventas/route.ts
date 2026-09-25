@@ -226,8 +226,10 @@ export async function POST(request: Request) {
   const cantidadCuotas = contado ? 1 : Number(body.cantidad_cuotas);
   const precioContado = Number(body.precio_contado);
   const entregaInicial = contado ? 0 : Number(body.entrega_inicial ?? 0);
-  // Al contado o en plan personalizado no hay recargo de financiación.
-  const recargo = contado || personalizada ? 0 : body.recargo_pct == null ? RECARGO_FINANCIACION : Number(body.recargo_pct);
+  // Al contado no hay recargo. El plan personalizado y el automático usan el
+  // recargo del plazo (por defecto 15% anual); en el personalizado lo absorbe la
+  // cuota de cancelación.
+  const recargo = contado ? 0 : body.recargo_pct == null ? RECARGO_FINANCIACION : Number(body.recargo_pct);
   const frecuencia = esFrecuencia(body.frecuencia) ? body.frecuencia : "mensual";
   const simulacionId =
     typeof body.simulacion_id === "string" && body.simulacion_id.trim() ? body.simulacion_id.trim() : null;
@@ -281,6 +283,8 @@ export async function POST(request: Request) {
           entregaInicial,
           cuotas: cuotasManuales,
           cancelacionVencimiento,
+          fechaVenta,
+          recargo,
         })
       : generarPlanCuotas({
           precioContado,

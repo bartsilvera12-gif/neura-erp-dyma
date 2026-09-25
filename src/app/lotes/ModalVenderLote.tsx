@@ -10,6 +10,7 @@ import { FechaSelect } from "@/components/ui/FechaSelect";
 import {
   generarPlanCuotas,
   generarPlanManual,
+  diasEntre,
   FRECUENCIAS,
   MAX_CUOTAS,
   DIAS_GRACIA,
@@ -188,6 +189,13 @@ export default function ModalVenderLote({
   const financiado = Math.max(0, Math.round(Number(precioContado) || 0) - Math.round(Number(entrega) || 0));
   const sumaManual = cuotasManualesLimpias.reduce((a, c) => a + c.monto, 0);
   const saldoCancelacion = financiado - sumaManual;
+  // Recargo prorrateado por el plazo (venta → cancelación); lo absorbe la cancelación.
+  const aniosPlazo =
+    conCancelacion && /^\d{4}-\d{2}-\d{2}$/.test(fechaVenta) && /^\d{4}-\d{2}-\d{2}$/.test(cancelacionVenc)
+      ? Math.max(0, diasEntre(fechaVenta, cancelacionVenc)) / 365
+      : 0;
+  const recargoMonto = conCancelacion ? Math.round(financiado * recargo * aniosPlazo) : 0;
+  const cancelacionImporte = saldoCancelacion + recargoMonto;
 
   /** Vista previa del plan. Si los datos no cierran, el motor avisa por qué. */
   const preview = useMemo(() => {
@@ -199,6 +207,8 @@ export default function ModalVenderLote({
               entregaInicial: Number(entrega),
               cuotas: cuotasManualesLimpias,
               cancelacionVencimiento: conCancelacion ? cancelacionVenc : undefined,
+              fechaVenta,
+              recargo,
             })
           : generarPlanCuotas({
               precioContado: Number(precioContado),
@@ -224,6 +234,7 @@ export default function ModalVenderLote({
     cuotasManualesLimpias,
     cancelacionVenc,
     conCancelacion,
+    fechaVenta,
   ]);
 
   const faltaConyuge = tipoElegido?.requiere_conyuge === true && !conyuge.nombre.trim();
@@ -534,16 +545,18 @@ export default function ModalVenderLote({
                   <div className="flex items-center justify-between gap-2">
                     <div>
                       <p className="text-xs font-semibold text-slate-700">Cuota final — Cancelación de saldo</p>
-                      <p className="text-[10px] text-slate-400">El sistema le asigna el saldo restante.</p>
+                      <p className="text-[10px] text-slate-400">
+                        Saldo restante {recargoMonto > 0 ? "+ recargo del plazo" : ""}.
+                      </p>
                     </div>
                     <div className="text-right">
                       <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">Importe</p>
                       <p
                         className={`text-sm font-bold tabular-nums ${
-                          saldoCancelacion > 0 ? "text-slate-900" : "text-rose-600"
+                          cancelacionImporte > 0 ? "text-slate-900" : "text-rose-600"
                         }`}
                       >
-                        {fmt(Math.max(0, saldoCancelacion), moneda)}
+                        {fmt(Math.max(0, cancelacionImporte), moneda)}
                       </p>
                     </div>
                   </div>
@@ -565,11 +578,16 @@ export default function ModalVenderLote({
                 <span>
                   Suma de cuotas: <b className="tabular-nums text-slate-700">{fmt(sumaManual, moneda)}</b>
                 </span>
+                {conCancelacion && recargoMonto > 0 ? (
+                  <span>
+                    Recargo del plazo: <b className="tabular-nums text-slate-700">{fmt(recargoMonto, moneda)}</b>
+                  </span>
+                ) : null}
                 {conCancelacion ? (
                   <span>
                     Va a la cancelación:{" "}
-                    <b className={`tabular-nums ${saldoCancelacion > 0 ? "text-slate-700" : "text-rose-600"}`}>
-                      {fmt(saldoCancelacion, moneda)}
+                    <b className={`tabular-nums ${cancelacionImporte > 0 ? "text-slate-700" : "text-rose-600"}`}>
+                      {fmt(cancelacionImporte, moneda)}
                     </b>
                   </span>
                 ) : (

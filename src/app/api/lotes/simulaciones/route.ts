@@ -5,9 +5,11 @@ import {
   esFrecuencia,
   simularPlan,
   generarPlanManual,
+  RECARGO_FINANCIACION,
   type Frecuencia,
   type CuotaManualInput,
 } from "@/lib/financiacion/plan-cuotas";
+import { hoyAsuncion } from "@/lib/reportes/calculo";
 import type { SimulacionGuardada } from "@/lib/financiacion/simulaciones";
 import { aSimulacionGuardada } from "@/lib/financiacion/simulaciones";
 
@@ -146,17 +148,23 @@ export async function POST(request: Request) {
   };
   try {
     if (personalizada) {
+      // El simulador no tiene fecha de venta: se usa "hoy" como referencia para
+      // prorratear el recargo (hasta la cuota de cancelación). Al generar el
+      // contrato se recalcula con la fecha de venta real.
+      const recargoTasa = body.recargo_pct == null ? RECARGO_FINANCIACION : Number(body.recargo_pct);
       const base = generarPlanManual({
         precioContado: Number(body.precio_contado),
         entregaInicial: Number(body.entrega_inicial ?? 0),
         cuotas: cuotasManuales,
         cancelacionVencimiento,
+        fechaVenta: hoyAsuncion(),
+        recargo: recargoTasa,
       });
       const ultima = base.cuotas[base.cuotas.length - 1];
       plan = {
         precio_contado: base.precio_contado,
         entrega_inicial: base.entrega_inicial,
-        recargo_pct: 0,
+        recargo_pct: recargoTasa,
         frecuencia,
         primer_vencimiento: base.cuotas[0]?.vencimiento ?? primerVencimiento,
         modo: "por_cantidad",
