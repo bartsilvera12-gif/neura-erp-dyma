@@ -77,6 +77,9 @@ export function canAccessSidebarSlug(
   opts?: { strict?: boolean }
 ): boolean {
   if (esSuperAdmin) return true;
+  // Consulta de precios: pantalla de solo lectura (nombre, SKU, precio, presentaciones),
+  // sin datos sensibles. Visible siempre en el menú; no es un módulo del catálogo.
+  if (slug === "precios") return true;
   if (slug === "dashboard") return grantedSlugs.has("dashboard");
   return isModuleSlugGranted(slug, grantedSlugs, inactiveSlugs, opts);
 }
