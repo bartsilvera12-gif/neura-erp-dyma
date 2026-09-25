@@ -84,16 +84,19 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
     const diasGracia = Number(v.dias_gracia ?? 5);
     // En un plan personalizado la última cuota (mayor número) es la cancelación.
     const personalizada = v.plan_tipo === "personalizada";
-    const ultimoNumero = filasCuotas.length;
+    const ultimoNumero = Math.max(0, ...filasCuotas.map((c) => Number(c.numero ?? 0)));
 
     const cuotas: CuotaVenta[] = filasCuotas.map((c) => {
       const saldo = Number(c.saldo ?? 0);
+      const esEntrega = c.es_entrega === true;
       const pendiente = c.estado === "pendiente";
       // Solo las pendientes generan mora, y sobre el saldo impago, no sobre el
-      // total: si hubo un pago parcial la mora corre sobre lo que falta.
-      const m = pendiente
-        ? calcularMoraCuota({ montoCuota: saldo, vencimiento: String(c.vencimiento), hoy, diasGracia })
-        : { dias_atraso: 0, dias_en_mora: 0, gastos_administrativos: 0, gastos_moratorios: 0, total: 0 };
+      // total: si hubo un pago parcial la mora corre sobre lo que falta. La entrega
+      // inicial no genera mora.
+      const m =
+        pendiente && !esEntrega
+          ? calcularMoraCuota({ montoCuota: saldo, vencimiento: String(c.vencimiento), hoy, diasGracia })
+          : { dias_atraso: 0, dias_en_mora: 0, gastos_administrativos: 0, gastos_moratorios: 0, total: 0 };
 
       return {
         id: String(c.id),
@@ -113,11 +116,14 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
         mora_moratoria: m.gastos_moratorios,
         mora_total: m.total,
         total_a_pagar: saldo + m.total,
-        es_cancelacion: personalizada && Number(c.numero) === ultimoNumero,
+        es_cancelacion: personalizada && !esEntrega && Number(c.numero) === ultimoNumero,
+        es_entrega: esEntrega,
       };
     });
 
     const pendientes = cuotas.filter((c) => c.estado === "pendiente");
+    // Los conteos de cuotas son del plan financiado; la entrega no cuenta ahí.
+    const financiadas = cuotas.filter((c) => !c.es_entrega);
     const lote = loteRes.data as { numero?: string } | null;
 
     const payload: VentaLote = {
@@ -155,9 +161,9 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
       observacion: (v.observacion as string) ?? null,
       cuotas,
       resumen: {
-        cuotas_pagadas: cuotas.filter((c) => c.estado === "pagada").length,
-        cuotas_pendientes: pendientes.length,
-        cuotas_vencidas: pendientes.filter((c) => c.dias_atraso > 0).length,
+        cuotas_pagadas: financiadas.filter((c) => c.estado === "pagada").length,
+        cuotas_pendientes: financiadas.filter((c) => c.estado === "pendiente").length,
+        cuotas_vencidas: financiadas.filter((c) => c.estado === "pendiente" && c.dias_atraso > 0).length,
         // Lo cobrado es la diferencia entre lo facturado y lo que sigue impago.
         cobrado: cuotas
           .filter((c) => c.estado !== "anulada")

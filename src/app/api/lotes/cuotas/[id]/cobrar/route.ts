@@ -88,13 +88,17 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
     }
 
     const saldo = Number(c.saldo ?? 0);
+    const esEntrega = c.es_entrega === true;
     const hoy = hoyAsuncion();
-    const mora = calcularMoraCuota({
-      montoCuota: saldo,
-      vencimiento: String(c.vencimiento),
-      hoy,
-      diasGracia: Number(v.dias_gracia ?? 5),
-    });
+    // La entrega inicial no genera mora.
+    const mora = esEntrega
+      ? { dias_atraso: 0, dias_en_mora: 0, gastos_administrativos: 0, gastos_moratorios: 0, total: 0 }
+      : calcularMoraCuota({
+          montoCuota: saldo,
+          vencimiento: String(c.vencimiento),
+          hoy,
+          diasGracia: Number(v.dias_gracia ?? 5),
+        });
     const moraACobrar = cobrarMora ? mora.total : 0;
     const totalExigible = saldo + moraACobrar;
 
@@ -117,7 +121,9 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
     let facturaId = (c.factura_id as string) ?? null;
 
     if (!facturaId) {
-      const detalle = `Contrato ${String(v.numero_contrato)} — cuota ${Number(c.numero)} · vence ${String(c.vencimiento)}`;
+      const detalle = esEntrega
+        ? `Contrato ${String(v.numero_contrato)} — entrega inicial`
+        : `Contrato ${String(v.numero_contrato)} — cuota ${Number(c.numero)} · vence ${String(c.vencimiento)}`;
       // IVA de la cuota de lote (regla de Contabilidad de DYMA). El desglose se
       // hace sobre el NETO sin IVA, no sobre el total:
       //   neto     = total ÷ 1,015

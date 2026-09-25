@@ -397,23 +397,44 @@ export async function POST(request: Request) {
     }
     ventaId = String(venta.id);
 
-    const { data: cuotasCreadas, error: errCuotas } = await sb.from("lote_venta_cuotas").insert(
-      plan.cuotas.map((c) => ({
+    const filasCuotas = plan.cuotas.map((c) => ({
+      empresa_id: empresaId,
+      venta_id: ventaId,
+      numero: c.numero,
+      vencimiento: c.vencimiento,
+      capital: c.capital,
+      interes: c.interes,
+      total: c.total,
+      saldo: c.total,
+      estado: "pendiente",
+      es_entrega: false,
+    }));
+    // La entrega inicial es una "cuota" especial (numero 0) que vence el día de la
+    // venta y se cobra por el mismo circuito. Queda fuera del plan financiado.
+    if (!contado && plan.entrega_inicial > 0) {
+      filasCuotas.unshift({
         empresa_id: empresaId,
         venta_id: ventaId,
-        numero: c.numero,
-        vencimiento: c.vencimiento,
-        capital: c.capital,
-        interes: c.interes,
-        total: c.total,
-        saldo: c.total,
+        numero: 0,
+        vencimiento: fechaVenta,
+        capital: plan.entrega_inicial,
+        interes: 0,
+        total: plan.entrega_inicial,
+        saldo: plan.entrega_inicial,
         estado: "pendiente",
-      }))
-    ).select("id, numero");
+        es_entrega: true,
+      });
+    }
+
+    const { data: cuotasCreadas, error: errCuotas } = await sb
+      .from("lote_venta_cuotas")
+      .insert(filasCuotas)
+      .select("id, numero");
     if (errCuotas) throw new Error(`No se pudieron generar las cuotas: ${errCuotas.message}`);
 
+    // La "primera cuota" para el circuito es la primera financiada (no la entrega).
     const primeraCuota = ((cuotasCreadas ?? []) as { id: string; numero: number }[])
-      .slice()
+      .filter((c) => c.numero >= 1)
       .sort((a, b) => a.numero - b.numero)[0] ?? null;
 
     if (partes.length > 0) {

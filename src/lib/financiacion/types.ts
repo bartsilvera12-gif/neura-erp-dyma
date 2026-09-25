@@ -36,6 +36,8 @@ export interface CuotaVenta {
   total_a_pagar: number;
   /** Cuota final de cancelación de un plan personalizado (se etiqueta aparte). */
   es_cancelacion?: boolean;
+  /** Fila de la entrega inicial (numero 0): cobrable, pero fuera del plan financiado. */
+  es_entrega?: boolean;
 }
 
 export interface VentaLote {

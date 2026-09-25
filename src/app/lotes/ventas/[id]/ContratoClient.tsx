@@ -235,12 +235,20 @@ export default function ContratoClient({ ventaId }: { ventaId: string }) {
               {data.cuotas.map((c) => (
                 <tr key={c.id} className={c.dias_atraso > 0 && c.estado === "pendiente" ? "bg-rose-50/40" : ""}>
                   <td className="px-3 py-2.5 font-medium text-slate-700">
-                    {c.numero}
-                    {c.es_cancelacion ? (
-                      <span className="ml-1.5 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700">
-                        Cancelación
+                    {c.es_entrega ? (
+                      <span className="inline-flex items-center rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700">
+                        Entrega inicial
                       </span>
-                    ) : null}
+                    ) : (
+                      <>
+                        {c.numero}
+                        {c.es_cancelacion ? (
+                          <span className="ml-1.5 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700">
+                            Cancelación
+                          </span>
+                        ) : null}
+                      </>
+                    )}
                   </td>
                   <td className="whitespace-nowrap px-3 py-2.5 tabular-nums text-slate-600">
                     {fmtFecha(c.vencimiento)}
@@ -286,14 +294,16 @@ export default function ContratoClient({ ventaId }: { ventaId: string }) {
                   <td className="px-3 py-2.5 text-right print:hidden">
                     {c.estado === "pendiente" && data.estado === "vigente" ? (
                       <div className="flex items-center justify-end gap-1.5">
-                        <button
-                          type="button"
-                          onClick={() => setReprogramando(c)}
-                          title="Reprogramar el vencimiento de esta cuota"
-                          className="rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-semibold text-slate-600 hover:bg-slate-50"
-                        >
-                          Editar fecha
-                        </button>
+                        {!c.es_entrega ? (
+                          <button
+                            type="button"
+                            onClick={() => setReprogramando(c)}
+                            title="Reprogramar el vencimiento de esta cuota"
+                            className="rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-semibold text-slate-600 hover:bg-slate-50"
+                          >
+                            Editar fecha
+                          </button>
+                        ) : null}
                         <button
                           type="button"
                           onClick={() => setCobrando(c)}
@@ -434,9 +444,13 @@ function ModalCobrar({
       >
         <div className="flex items-start justify-between gap-3">
           <div>
-            <h3 className="text-base font-semibold text-slate-900">Cobrar cuota {cuota.numero}</h3>
+            <h3 className="text-base font-semibold text-slate-900">
+              {cuota.es_entrega ? "Cobrar entrega inicial" : `Cobrar cuota ${cuota.numero}`}
+            </h3>
             <p className="mt-0.5 text-[11px] text-slate-500">
-              Vence {fmtFecha(cuota.vencimiento)} · se emite la factura de la cuota.
+              {cuota.es_entrega
+                ? "Se emite la factura de la entrega inicial."
+                : `Vence ${fmtFecha(cuota.vencimiento)} · se emite la factura de la cuota.`}
             </p>
           </div>
           <button type="button" onClick={onCancel} className="rounded-lg p-1 text-slate-400 hover:bg-slate-100">

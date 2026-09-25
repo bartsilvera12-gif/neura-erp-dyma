@@ -251,14 +251,16 @@ export async function cargarDatosContrato(
   // que el comprador va a pagar, incluida la última cuota con su redondeo.
   const { data: cuotasRaw } = await sb
     .from("lote_venta_cuotas")
-    .select("numero, vencimiento, capital, interes, total, saldo, estado, pagada_at")
+    .select("numero, vencimiento, capital, interes, total, saldo, estado, pagada_at, es_entrega")
     .eq("venta_id", id)
     .eq("empresa_id", empresaId)
     .order("numero");
 
   // En un plan personalizado la última cuota es la "Cancelación de saldo".
   const personalizada = v.plan_tipo === "personalizada";
-  const cuotasArr = (cuotasRaw ?? []) as Record<string, unknown>[];
+  // El anexo del contrato es el plan financiado: la entrega inicial no va acá
+  // (ya figura en la Cláusula Tercera).
+  const cuotasArr = ((cuotasRaw ?? []) as Record<string, unknown>[]).filter((c) => c.es_entrega !== true);
   const cuotas: CuotaContrato[] = cuotasArr.map((c, idx) => ({
     numero: Number(c.numero ?? 0),
     vencimiento: ymd(c.vencimiento),
