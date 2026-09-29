@@ -173,7 +173,7 @@ export function plantillaCompraventaPlazos(datos: DatosContrato, opciones?: { au
   table.datos{width:100%;border-collapse:collapse;margin:8px 0 4px;font-size:9pt}
   table.datos th,table.datos td{border:1px solid #9ca3af;padding:3px 6px;text-align:left;vertical-align:top}
   table.datos th{background:#f3f4f6;font-weight:700;width:26%;white-space:nowrap}
-  .firmas{display:flex;flex-wrap:wrap;gap:24px;margin-top:30px}
+  .firmas{display:flex;flex-wrap:wrap;gap:24px;margin-top:64px}
   .firma{flex:1 1 40%;min-width:200px;text-align:center}
   .firma .linea{border-top:1px solid #111827;margin-bottom:6px}
   .firma .rol{font-size:9.5pt;font-weight:700}

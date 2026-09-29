@@ -76,7 +76,7 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
 
     const { data: venta, error: errVenta } = await sb
       .from("lote_ventas")
-      .select("id, cliente_id, numero_contrato, moneda, dias_gracia, estado")
+      .select("id, cliente_id, numero_contrato, moneda, dias_gracia, estado, lote_id")
       .eq("id", String(c.venta_id))
       .eq("empresa_id", empresaId)
       .maybeSingle();
@@ -121,23 +121,33 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
     let facturaId = (c.factura_id as string) ?? null;
 
     if (!facturaId) {
-      const detalle = esEntrega
-        ? `Contrato ${String(v.numero_contrato)} — entrega inicial`
-        : `Contrato ${String(v.numero_contrato)} — cuota ${Number(c.numero)} · vence ${String(c.vencimiento)}`;
+      // Descripción simple para el cliente: "Cuota N del Lote X" / "Entrega inicial
+      // del Lote X". El desglose tributario (70/30) NO se expone en la descripción,
+      // solo se aplica internamente en las líneas de la factura.
+      const { data: loteRow } = await sb
+        .from("lotes")
+        .select("numero")
+        .eq("id", String(v.lote_id))
+        .eq("empresa_id", empresaId)
+        .maybeSingle();
+      const loteNumero = (loteRow as { numero?: string } | null)?.numero ?? "";
+      const loteTxt = loteNumero ? ` del Lote ${loteNumero}` : "";
+      const detalle = esEntrega ? `Entrega inicial${loteTxt}` : `Cuota ${Number(c.numero)}${loteTxt}`;
       // IVA de la cuota de lote (regla de Contabilidad de DYMA). El desglose se
       // hace sobre el NETO sin IVA, no sobre el total:
       //   neto     = total ÷ 1,015
       //   exento   = 70% del neto
       //   gravado  = el resto de la cuota (base gravada al 5% + su IVA)
       // El IVA 5% sale de la parte gravada, y Exenta + Gravada + IVA cierra exacto
-      // el total de la cuota. La limpieza NO usa este desglose.
+      // el total de la cuota. La limpieza NO usa este desglose. Ambas líneas llevan
+      // la misma descripción simple; lo que las diferencia es su tasa.
       const totalCuota = Number(c.total ?? 0);
       const neto = Math.round(totalCuota / 1.015);
       const exento = Math.round(neto * 0.7);
       const gravado5 = totalCuota - exento;
       const lineasCuota: LineaFacturaSimple[] = [
-        { descripcion: `${detalle} — 70% exento`, total: exento, tasa: 0 as const },
-        { descripcion: `${detalle} — 30% gravado IVA 5%`, total: gravado5, tasa: 5 as const },
+        { descripcion: detalle, total: exento, tasa: 0 as const },
+        { descripcion: detalle, total: gravado5, tasa: 5 as const },
       ].filter((l) => l.total > 0);
       const factura = await emitirFacturaSimple(sbFact, {
         empresaId,
