@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, Check, RefreshCw, Save, Trash2, Undo2, X } from "lucide-react";
+import { ArrowLeft, Check, FileDown, RefreshCw, Save, Trash2, Undo2, X } from "lucide-react";
 import { fetchWithSupabaseSession } from "@/lib/api/fetch-with-supabase-session";
 import { getClientes } from "@/lib/clientes/storage";
 import SmartSearchSelect, { type SmartOption } from "@/components/ui/SmartSearchSelect";
@@ -21,6 +21,7 @@ import {
   type Simulacion,
 } from "@/lib/financiacion/plan-cuotas";
 import { ESTADO_SIMULACION_UI, type SimulacionGuardada } from "@/lib/financiacion/simulaciones";
+import { plantillaSimulacion } from "@/lib/financiacion/plantilla-simulacion";
 import type { Cliente } from "@/lib/clientes/types";
 import type { Lote } from "@/lib/lotes/types";
 
@@ -199,6 +200,43 @@ export default function SimuladorClient() {
   ]);
 
   const p = resultado.plan;
+
+  /** Abre el plan simulado como documento imprimible (ver o guardar PDF). */
+  function verPdfSimulacion() {
+    if (!p) return;
+    const cli = clientes.find((x) => x.id === clienteId);
+    const loteSel = lotes.find((x) => x.id === loteId);
+    const html = plantillaSimulacion({
+      cliente: cli ? ((cli.empresa ?? cli.nombre_contacto) || "").trim() || null : null,
+      lote: loteSel ? `Lote ${loteSel.numero}` : null,
+      moneda: loteSel?.moneda ?? "GS",
+      emitida: hoyYmd(),
+      precio_contado: p.precio_contado,
+      entrega_inicial: p.entrega_inicial,
+      capital: p.capital,
+      interes_total: p.interes_total,
+      monto_financiado: p.monto_financiado,
+      total_operacion: p.total_operacion,
+      cantidad_cuotas: p.cuotas.length,
+      cuota: p.cuota,
+      frecuencia: esPersonalizada ? undefined : FRECUENCIAS[p.frecuencia]?.label,
+      recargo_pct: p.interes_total > 0 ? p.recargo_pct : 0,
+      es_personalizada: esPersonalizada,
+      cuotas: p.cuotas.map((c) => ({
+        numero: c.numero,
+        vencimiento: c.vencimiento,
+        capital: c.capital,
+        interes: c.interes,
+        total: c.total,
+        es_cancelacion: esPersonalizada && c.numero === p.cuotas.length,
+      })),
+    });
+    const w = window.open("", "_blank");
+    if (w) {
+      w.document.write(html);
+      w.document.close();
+    }
+  }
 
   async function guardar() {
     if (!p) return;
@@ -743,6 +781,17 @@ export default function SimuladorClient() {
                 <p className="text-[11px] text-slate-600">
                   Total de la operación: <span className="font-semibold">{gs(p.total_operacion)}</span>
                 </p>
+              </div>
+
+              <div className="flex justify-end">
+                <button
+                  type="button"
+                  onClick={verPdfSimulacion}
+                  className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50"
+                >
+                  <FileDown className="h-3.5 w-3.5" />
+                  Ver / descargar PDF
+                </button>
               </div>
 
               <div className="max-h-72 overflow-auto rounded-2xl border border-slate-200 bg-white">

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { X } from "lucide-react";
+import { X, FileDown } from "lucide-react";
 import { fetchWithSupabaseSession } from "@/lib/api/fetch-with-supabase-session";
 import SmartSearchSelect, { type SmartOption } from "@/components/ui/SmartSearchSelect";
 import { FancySelect } from "@/components/ui/FancySelect";
@@ -19,6 +19,7 @@ import {
   RECARGO_FINANCIACION,
 } from "@/lib/financiacion/plan-cuotas";
 import type { Frecuencia } from "@/lib/financiacion/plan-cuotas";
+import { plantillaSimulacion } from "@/lib/financiacion/plantilla-simulacion";
 import type { Lote } from "@/lib/lotes/types";
 import type { Vendedor } from "@/lib/vendedores/types";
 import type { ContratoTipo, ParteContrato, RolParte } from "@/lib/contratos/types";
@@ -294,6 +295,43 @@ export default function ModalVenderLote({
   }
 
   const p = preview.plan;
+
+  /** Abre el plan simulado como documento imprimible (para ver o guardar PDF). */
+  function verPdfSimulacion() {
+    if (!p) return;
+    const html = plantillaSimulacion({
+      cliente: opcionesCliente.find((o) => o.id === clienteId)?.label ?? null,
+      lote: `Lote ${lote.numero}`,
+      moneda,
+      emitida: hoyYmd(),
+      precio_contado: p.precio_contado,
+      entrega_inicial: p.entrega_inicial,
+      capital: p.capital,
+      interes_total: p.interes_total,
+      monto_financiado: p.monto_financiado,
+      total_operacion: p.total_operacion,
+      cantidad_cuotas: p.cuotas.length,
+      cuota: p.cuotas[0]?.total ?? 0,
+      frecuencia: esPersonalizada ? undefined : FRECUENCIAS[frecuencia]?.label,
+      recargo_pct: p.interes_total > 0 ? recargo : 0,
+      es_personalizada: esPersonalizada,
+      cuotas: p.cuotas.map((c) => ({
+        numero: c.numero,
+        vencimiento: c.vencimiento,
+        capital: c.capital,
+        interes: c.interes,
+        total: c.total,
+        es_cancelacion: esPersonalizada && c.numero === p.cuotas.length,
+      })),
+    });
+    const w = window.open("", "_blank");
+    if (w) {
+      w.document.write(html);
+      w.document.close();
+    } else {
+      setErr("El navegador bloqueó la ventana del PDF. Permití las ventanas emergentes para este sitio.");
+    }
+  }
 
   return (
     <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/50 p-4" onClick={onCancel}>
@@ -655,6 +693,17 @@ export default function ModalVenderLote({
                   <Dato titulo="Cuota fija" valor={fmt(p.cuotas[0]?.total ?? 0, moneda)} destacado />
                 </>
               )}
+            </div>
+
+            <div className="mt-3 flex justify-end">
+              <button
+                type="button"
+                onClick={verPdfSimulacion}
+                className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50"
+              >
+                <FileDown className="h-3.5 w-3.5" />
+                Ver / descargar PDF
+              </button>
             </div>
 
             <div className="mt-3 max-h-52 overflow-y-auto rounded-xl border border-slate-200">
