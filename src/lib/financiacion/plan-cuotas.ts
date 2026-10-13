@@ -424,6 +424,240 @@ export function generarPlanManual(input: {
   };
 }
 
+/** Un refuerzo del plan personalizado con interés: una cuota extra, en fecha y monto a mano. */
+export interface RefuerzoInput {
+  /** Vencimiento YYYY-MM-DD. */
+  vencimiento: string;
+  /** Importe total del refuerzo (capital + interés del tramo). */
+  monto: number;
+}
+
+/**
+ * Parte una lista de pagos (fecha + monto TOTAL) en capital e interés, cobrando
+ * el interés sobre el SALDO que va bajando, prorrateado por los días corridos
+ * entre pago y pago (desde la fecha de la venta hasta el primero). Es el plan
+ * personalizado CON interés: a diferencia de los montos limpios, cada cuota lleva
+ * su interés (igual que el plan francés automático), pero las fechas y los montos
+ * los define el vendedor (cuota mensual + refuerzos).
+ *
+ * El interés de cada período = saldo × tasa anual × (días / 365), redondeado al
+ * guaraní. El capital de la cuota = total − interés, y el saldo baja por ese
+ * capital. La ÚLTIMA cuota cierra el saldo exacto: su capital es lo que resta y
+ * su total = ese capital + el interés del tramo (por eso la última puede diferir
+ * de la cuota mensual). Así Σ capital = capital financiado y el saldo termina en
+ * cero, igual que la calculadora del BCP.
+ *
+ * Si una cuota (que no sea la última) no alcanza a cubrir el interés de su tramo,
+ * el saldo no bajaría: se corta con un error que dice cuál es el interés a cubrir.
+ */
+export function generarPlanPersonalizadoConInteres(input: {
+  precioContado: number;
+  entregaInicial?: number;
+  /** Cuotas cargadas (fecha + monto total), en cualquier orden: se ordenan por fecha. */
+  cuotas: CuotaManualInput[];
+  /** Fecha de la venta (YYYY-MM-DD): desde acá corre el interés hasta el primer pago. */
+  fechaVenta: string;
+  /** Tasa anual (por defecto 15%). Con 0 es un plan de montos limpios. */
+  recargo?: number;
+}): PlanCuotas {
+  const precioContado = Math.round(input.precioContado);
+  const entrega = Math.round(input.entregaInicial ?? 0);
+  const tasaAnual = input.recargo ?? RECARGO_FINANCIACION;
+
+  if (!Number.isFinite(precioContado) || precioContado <= 0) {
+    throw new Error("El precio de contado debe ser mayor a 0");
+  }
+  if (entrega < 0) throw new Error("La entrega inicial no puede ser negativa");
+  if (entrega >= precioContado) {
+    throw new Error("La entrega inicial no puede cubrir todo el precio: no habría nada que financiar");
+  }
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(input.fechaVenta)) {
+    throw new Error("La fecha de la venta es inválida");
+  }
+
+  const manuales = [...(input.cuotas ?? [])]
+    .map((c, idx) => {
+      const monto = Math.round(Number(c.monto));
+      if (!Number.isFinite(monto) || monto <= 0) {
+        throw new Error(`El monto de la cuota ${idx + 1} debe ser mayor a 0`);
+      }
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(String(c.vencimiento))) {
+        throw new Error(`La fecha de vencimiento de la cuota ${idx + 1} es inválida`);
+      }
+      return { vencimiento: String(c.vencimiento), monto };
+    })
+    .sort((a, b) => a.vencimiento.localeCompare(b.vencimiento));
+
+  if (manuales.length < 1) throw new Error("Cargá al menos una cuota.");
+  if (manuales.length > MAX_CUOTAS) {
+    throw new Error(`El plan no puede tener más de ${MAX_CUOTAS} cuotas.`);
+  }
+
+  const capital = precioContado - entrega;
+
+  const cuotas: Cuota[] = [];
+  let saldo = capital;
+  let prev = input.fechaVenta;
+  let interesAcum = 0;
+  manuales.forEach((pago, k) => {
+    const esUltima = k === manuales.length - 1;
+    const dias = Math.max(0, diasEntre(prev, pago.vencimiento));
+    const interes = tasaAnual > 0 ? Math.round((saldo * tasaAnual * dias) / 365) : 0;
+
+    let capitalCuota: number;
+    let total: number;
+    if (esUltima) {
+      // La última cierra el saldo: se lleva lo que resta más el interés del tramo.
+      capitalCuota = saldo;
+      total = capitalCuota + interes;
+    } else {
+      total = pago.monto;
+      capitalCuota = total - interes;
+      if (capitalCuota <= 0) {
+        throw new Error(
+          `La cuota ${k + 1} (${total.toLocaleString("es-PY")}) no alcanza a cubrir el interés del período ` +
+            `(${interes.toLocaleString("es-PY")}): el saldo nunca bajaría. Subí el monto de la cuota.`
+        );
+      }
+    }
+
+    const saldoFin = saldo - capitalCuota;
+    cuotas.push({
+      numero: k + 1,
+      vencimiento: pago.vencimiento,
+      saldo_inicial: saldo,
+      interes,
+      capital: capitalCuota,
+      total,
+      saldo_final: esUltima ? 0 : saldoFin,
+    });
+    interesAcum += interes;
+    saldo = saldoFin;
+    prev = pago.vencimiento;
+  });
+
+  const interesTotal = interesAcum;
+  const montoFinanciado = capital + interesTotal;
+
+  return {
+    precio_contado: precioContado,
+    entrega_inicial: entrega,
+    capital,
+    cuota_exacta: 0,
+    interes_total: interesTotal,
+    monto_financiado: montoFinanciado,
+    total_operacion: entrega + montoFinanciado,
+    cuotas,
+  };
+}
+
+/**
+ * Arma el cronograma de un plan personalizado CON interés a partir de una cuota
+ * mensual fija y, opcionalmente, refuerzos (cuotas extra a mano). El sistema
+ * estira cuántas cuotas mensuales hacen falta para cancelar el saldo cobrando el
+ * interés sobre el saldo que va bajando: cada mes paga el interés del tramo y lo
+ * que sobra amortiza, así que hacen falta MÁS cuotas que sin interés. La última
+ * cuota mensual cierra el saldo exacto.
+ *
+ * Devuelve la lista de pagos (fecha + monto total), lista para `generarPlanPersonalizadoConInteres`.
+ * No incluye cuota de cancelación: el plan cierra solo con las mensuales y los refuerzos.
+ *
+ * La cuota mensual tiene que superar el interés del primer tramo; si no, el saldo
+ * no baja y el plan sería infinito: se corta con un error que dice el mínimo.
+ */
+export function generarCronogramaMensualConInteres(input: {
+  /** Saldo a financiar (precio de contado − entrega inicial). */
+  capital: number;
+  /** Cuota mensual fija (monto total). */
+  montoMensual: number;
+  /** Vencimiento de la primera cuota mensual, YYYY-MM-DD. */
+  primerVencimiento: string;
+  /** Fecha de la venta, YYYY-MM-DD: desde acá corre el interés hasta el primer pago. */
+  fechaVenta: string;
+  /** Refuerzos (cuotas extra), opcional. */
+  refuerzos?: RefuerzoInput[];
+  /** Tasa anual (por defecto 15%). */
+  recargo?: number;
+}): CuotaManualInput[] {
+  const capital = Math.round(input.capital);
+  const mensual = Math.round(input.montoMensual);
+  const tasaAnual = input.recargo ?? RECARGO_FINANCIACION;
+
+  if (!Number.isFinite(capital) || capital <= 0) throw new Error("No hay saldo para financiar.");
+  if (!Number.isFinite(mensual) || mensual <= 0) throw new Error("La cuota mensual debe ser mayor a 0.");
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(input.primerVencimiento)) throw new Error("El primer vencimiento es inválido.");
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(input.fechaVenta)) throw new Error("La fecha de la venta es inválida.");
+
+  const refuerzos = (input.refuerzos ?? [])
+    .filter((r) => Number(r.monto) > 0 && /^\d{4}-\d{2}-\d{2}$/.test(String(r.vencimiento)))
+    .map((r) => ({ vencimiento: String(r.vencimiento), monto: Math.round(Number(r.monto)) }))
+    .sort((a, b) => a.vencimiento.localeCompare(b.vencimiento));
+
+  const interesDeTramo = (saldo: number, desde: string, hasta: string) =>
+    tasaAnual > 0 ? Math.round((saldo * tasaAnual * Math.max(0, diasEntre(desde, hasta))) / 365) : 0;
+
+  const pagos: CuotaManualInput[] = [];
+  let saldo = capital;
+  let prev = input.fechaVenta;
+  let mesIndex = 0;
+  let refIndex = 0;
+
+  while (saldo > 0) {
+    if (pagos.length > MAX_CUOTAS) {
+      throw new Error(
+        `Con esa cuota mensual harían falta más de ${MAX_CUOTAS} cuotas. Subí el monto de la cuota mensual.`
+      );
+    }
+    const fechaMensual = sumarMeses(input.primerVencimiento, mesIndex);
+    const refPendiente = refIndex < refuerzos.length ? refuerzos[refIndex]! : null;
+    // El próximo evento es el que venza antes: la cuota mensual o el refuerzo.
+    const esRefuerzo = refPendiente != null && refPendiente.vencimiento.localeCompare(fechaMensual) < 0;
+
+    if (esRefuerzo && refPendiente) {
+      const interes = interesDeTramo(saldo, prev, refPendiente.vencimiento);
+      const capitalRef = refPendiente.monto - interes;
+      if (capitalRef <= 0) {
+        throw new Error(
+          `El refuerzo del ${refPendiente.vencimiento} (${refPendiente.monto.toLocaleString("es-PY")}) no alcanza a ` +
+            `cubrir el interés acumulado (${interes.toLocaleString("es-PY")}). Subí el monto del refuerzo.`
+        );
+      }
+      if (capitalRef >= saldo) {
+        // El refuerzo cierra el plan: se recorta a lo que resta + interés del tramo.
+        pagos.push({ vencimiento: refPendiente.vencimiento, monto: saldo + interes });
+        saldo = 0;
+        break;
+      }
+      pagos.push({ vencimiento: refPendiente.vencimiento, monto: refPendiente.monto });
+      saldo -= capitalRef;
+      prev = refPendiente.vencimiento;
+      refIndex += 1;
+      continue;
+    }
+
+    const interes = interesDeTramo(saldo, prev, fechaMensual);
+    const capitalMes = mensual - interes;
+    if (capitalMes <= 0) {
+      throw new Error(
+        `La cuota de ${mensual.toLocaleString("es-PY")} no alcanza a cubrir el interés del período ` +
+          `(${interes.toLocaleString("es-PY")}): el saldo nunca bajaría. Subí la cuota mensual.`
+      );
+    }
+    if (capitalMes >= saldo) {
+      // Esta mensual cierra el plan: total = lo que resta + interés del tramo.
+      pagos.push({ vencimiento: fechaMensual, monto: saldo + interes });
+      saldo = 0;
+      break;
+    }
+    pagos.push({ vencimiento: fechaMensual, monto: mensual });
+    saldo -= capitalMes;
+    prev = fechaMensual;
+    mesIndex += 1;
+  }
+
+  return pagos.sort((a, b) => a.vencimiento.localeCompare(b.vencimiento));
+}
+
 /** Cómo se resolvió la simulación: qué dato puso el usuario y cuál dedujo el sistema. */
 export type ModoSimulacion = "por_cuota" | "por_cantidad";
 

@@ -16,6 +16,8 @@ import {
   RECARGO_FINANCIACION,
   simularPlan,
   generarPlanManual,
+  generarPlanPersonalizadoConInteres,
+  generarCronogramaMensualConInteres,
   diasEntre,
   sumarMeses,
   type Frecuencia,
@@ -74,9 +76,12 @@ export default function SimuladorClient() {
   const [conCancelacion, setConCancelacion] = useState(true);
   // ¿Aplicar el recargo del plazo a la cancelación? Se apaga para planes de montos limpios.
   const [conRecargo, setConRecargo] = useState(true);
+  // ¿El plan personalizado generado lleva interés sobre el saldo (tipo francés)?
+  const [planConInteres, setPlanConInteres] = useState(false);
   // Generador: cuota mensual + refuerzos (el sistema estira las cuotas necesarias).
-  const [genMonto, setGenMonto] = useState("1800000");
+  const [genMonto, setGenMonto] = useState("2000000");
   const [genDesde, setGenDesde] = useState(hoyYmd());
+  const [genConInteres, setGenConInteres] = useState(true);
   const [refuerzos, setRefuerzos] = useState<{ vencimiento: string; monto: string }[]>([]);
 
   const [clientes, setClientes] = useState<Cliente[]>([]);
@@ -148,6 +153,27 @@ export default function SimuladorClient() {
     const refs = refuerzos
       .filter((r) => Number(r.monto) > 0 && /^\d{4}-\d{2}-\d{2}$/.test(r.vencimiento))
       .map((r) => ({ vencimiento: r.vencimiento, monto: Math.round(Number(r.monto)) }));
+
+    if (genConInteres) {
+      try {
+        const pagos = generarCronogramaMensualConInteres({
+          capital: financiado,
+          montoMensual: monthly,
+          primerVencimiento: genDesde,
+          fechaVenta: hoyYmd(),
+          refuerzos: refs,
+          recargo: recargoTasaSim,
+        });
+        setCuotasManuales(pagos.map((c) => ({ vencimiento: c.vencimiento, monto: String(c.monto) })));
+        setConCancelacion(false);
+        setPlanConInteres(true);
+        setErr(null);
+      } catch (e) {
+        setErr(e instanceof Error ? e.message : "No se pudo generar el plan.");
+      }
+      return;
+    }
+
     const refsSum = refs.reduce((a, r) => a + r.monto, 0);
     const restante = financiado - refsSum;
     if (restante <= 0) {
@@ -168,6 +194,7 @@ export default function SimuladorClient() {
     );
     setCuotasManuales(todas);
     setConCancelacion(false);
+    setPlanConInteres(false);
     setErr(null);
   }
   const financiado = Math.max(0, Math.round(Number(precio) || 0) - Math.round(Number(entrega) || 0));
@@ -186,14 +213,22 @@ export default function SimuladorClient() {
   const resultado = useMemo(() => {
     try {
       if (esPersonalizada) {
-        const base = generarPlanManual({
-          precioContado: Number(precio),
-          entregaInicial: Number(entrega),
-          cuotas: cuotasManualesLimpias,
-          cancelacionVencimiento: conCancelacion ? cancelacionVenc : undefined,
-          fechaVenta: hoyYmd(),
-          recargo: conRecargo ? recargoTasaSim : 0,
-        });
+        const base = planConInteres
+          ? generarPlanPersonalizadoConInteres({
+              precioContado: Number(precio),
+              entregaInicial: Number(entrega),
+              cuotas: cuotasManualesLimpias,
+              fechaVenta: hoyYmd(),
+              recargo: recargoTasaSim,
+            })
+          : generarPlanManual({
+              precioContado: Number(precio),
+              entregaInicial: Number(entrega),
+              cuotas: cuotasManualesLimpias,
+              cancelacionVencimiento: conCancelacion ? cancelacionVenc : undefined,
+              fechaVenta: hoyYmd(),
+              recargo: conRecargo ? recargoTasaSim : 0,
+            });
         const ultima = base.cuotas[base.cuotas.length - 1];
         const plan: Simulacion = {
           ...base,
@@ -236,6 +271,7 @@ export default function SimuladorClient() {
     cancelacionVenc,
     conCancelacion,
     conRecargo,
+    planConInteres,
     recargoTasaSim,
   ]);
 
@@ -292,7 +328,7 @@ export default function SimuladorClient() {
           nombre: nombre.trim() || null,
           precio_contado: Number(precio),
           entrega_inicial: Number(entrega),
-          recargo_pct: esPersonalizada && !conRecargo ? 0 : Number(recargoPct) / 100,
+          recargo_pct: esPersonalizada && !planConInteres && !conRecargo ? 0 : Number(recargoPct) / 100,
           frecuencia,
           primer_vencimiento: esPersonalizada ? cuotasManualesLimpias[0]?.vencimiento ?? "" : primerVencimiento,
           cantidad_cuotas: modo === "por_cantidad" ? Number(cantidadCuotas) : null,
@@ -330,8 +366,15 @@ export default function SimuladorClient() {
     setPlanTipo(s.plan_tipo);
     if (s.plan_tipo === "personalizada" && s.cuotas_manuales && s.cuotas_manuales.length > 0) {
       setCuotasManuales(s.cuotas_manuales.map((c) => ({ vencimiento: c.vencimiento, monto: String(c.monto) })));
+      // Un plan de montos limpios suma ≤ el saldo; uno con interés suma más (lleva el interés).
+      const capital = Math.round(s.precio_contado) - Math.round(s.entrega_inicial);
+      const sumaCuotas = s.cuotas_manuales.reduce((a, c) => a + Math.round(c.monto), 0);
+      const conInteres = sumaCuotas > capital;
+      setPlanConInteres(conInteres);
       setCancelacionVenc(s.cancelacion_vencimiento ?? hoyYmd());
-      setConCancelacion(Boolean(s.cancelacion_vencimiento));
+      setConCancelacion(!conInteres && Boolean(s.cancelacion_vencimiento));
+    } else {
+      setPlanConInteres(false);
     }
     setObservacion(s.observacion ?? "");
     setNombre(s.nombre ? `${s.nombre} (copia)` : "");
@@ -388,6 +431,11 @@ export default function SimuladorClient() {
         plan_tipo: s.plan_tipo,
         cuotas_manuales: s.cuotas_manuales,
         cancelacion_vencimiento: s.cancelacion_vencimiento,
+        // Se infiere por la suma de las cuotas: un plan con interés suma más que el saldo.
+        plan_interes:
+          s.plan_tipo === "personalizada" &&
+          (s.cuotas_manuales ?? []).reduce((a, c) => a + Math.round(c.monto), 0) >
+            Math.round(s.precio_contado) - Math.round(s.entrega_inicial),
       },
     });
   }
@@ -562,6 +610,16 @@ export default function SimuladorClient() {
                     </div>
                   ))}
                 </div>
+                <label className="mt-2.5 flex items-center gap-2 text-[11px] font-medium text-slate-600">
+                  <input
+                    type="checkbox"
+                    checked={genConInteres}
+                    onChange={(e) => setGenConInteres(e.target.checked)}
+                    className="h-3.5 w-3.5"
+                  />
+                  Agregar interés del {Number(recargoPct)}% anual sobre el saldo (como el plan automático)
+                </label>
+
                 <div className="mt-1.5 flex items-center justify-between">
                   <button
                     type="button"
@@ -579,8 +637,9 @@ export default function SimuladorClient() {
                   </button>
                 </div>
                 <p className="mt-1 text-[10px] text-slate-400">
-                  El sistema calcula cuántas cuotas de ese monto hacen falta para cubrir el saldo (con los refuerzos
-                  aparte) y cierra exacto, sin cuota de cancelación.
+                  {genConInteres
+                    ? "Con interés: cada cuota cobra el interés sobre el saldo que va bajando (como el plan automático), así que se estiran más cuotas. La cuota mensual tiene que superar el interés del primer mes."
+                    : "Sin interés (montos limpios): el sistema estira el saldo en cuotas iguales, cierra exacto y no agrega cuota de cancelación."}
                 </p>
               </div>
 
@@ -637,17 +696,25 @@ export default function SimuladorClient() {
                 + Agregar cuota
               </button>
 
-              <label className="mt-3 flex items-center gap-2 text-xs font-medium text-slate-600">
-                <input
-                  type="checkbox"
-                  checked={conCancelacion}
-                  onChange={(e) => setConCancelacion(e.target.checked)}
-                  className="h-3.5 w-3.5"
-                />
-                Agregar cuota final de cancelación (se lleva el saldo restante)
-              </label>
+              {planConInteres ? (
+                <p className="mt-3 rounded-xl border border-sky-200 bg-sky-50 px-3 py-2 text-[11px] text-sky-800">
+                  Plan <b>con interés</b> del {Number(recargoPct)}% anual sobre el saldo. Cada cuota ya incluye su
+                  interés y la última cierra exacto. Para volver a montos limpios, destildá «Agregar interés» y generá
+                  de nuevo.
+                </p>
+              ) : (
+                <label className="mt-3 flex items-center gap-2 text-xs font-medium text-slate-600">
+                  <input
+                    type="checkbox"
+                    checked={conCancelacion}
+                    onChange={(e) => setConCancelacion(e.target.checked)}
+                    className="h-3.5 w-3.5"
+                  />
+                  Agregar cuota final de cancelación (se lleva el saldo restante)
+                </label>
+              )}
 
-              {conCancelacion ? (
+              {!planConInteres && conCancelacion ? (
                 <label className="mt-1.5 ml-5 flex items-center gap-2 text-xs text-slate-600">
                   <input
                     type="checkbox"
@@ -659,7 +726,7 @@ export default function SimuladorClient() {
                 </label>
               ) : null}
 
-              {conCancelacion ? (
+              {!planConInteres && conCancelacion ? (
                 <div className="mt-2 rounded-xl border border-slate-200 bg-white p-3">
                   <div className="flex items-center justify-between gap-2">
                     <div>
@@ -691,15 +758,26 @@ export default function SimuladorClient() {
                 <span>
                   Saldo a financiar: <b className="tabular-nums text-slate-700">{gs(financiado)}</b>
                 </span>
-                <span>
-                  Suma de cuotas: <b className="tabular-nums text-slate-700">{gs(sumaManual)}</b>
-                </span>
-                {conCancelacion && recargoMonto > 0 ? (
+                {planConInteres ? (
+                  <>
+                    <span>
+                      Intereses: <b className="tabular-nums text-slate-700">{gs(p?.interes_total ?? 0)}</b>
+                    </span>
+                    <span>
+                      Total a pagar: <b className="tabular-nums text-slate-700">{gs(p?.monto_financiado ?? 0)}</b>
+                    </span>
+                  </>
+                ) : (
+                  <span>
+                    Suma de cuotas: <b className="tabular-nums text-slate-700">{gs(sumaManual)}</b>
+                  </span>
+                )}
+                {!planConInteres && conCancelacion && recargoMonto > 0 ? (
                   <span>
                     Recargo del plazo: <b className="tabular-nums text-slate-700">{gs(recargoMonto)}</b>
                   </span>
                 ) : null}
-                {conCancelacion ? (
+                {planConInteres ? null : conCancelacion ? (
                   <span>
                     Va a la cancelación:{" "}
                     <b className={`tabular-nums ${cancelacionImporte > 0 ? "text-slate-700" : "text-rose-600"}`}>

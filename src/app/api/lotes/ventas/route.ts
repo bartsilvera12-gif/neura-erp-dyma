@@ -6,6 +6,7 @@ import {
   esFrecuencia,
   generarPlanCuotas,
   generarPlanManual,
+  generarPlanPersonalizadoConInteres,
   DIAS_GRACIA,
   MORA_ADMINISTRATIVA_DIARIA,
   MORA_MORATORIA_DIARIA,
@@ -220,6 +221,10 @@ export async function POST(request: Request) {
   // Plan personalizado: cuotas cargadas a mano, sin interés, con cuota final de
   // cancelación. Es una venta financiada; solo cambia cómo se arman las cuotas.
   const personalizada = !contado && body.plan_tipo === "personalizada";
+  // Plan personalizado CON interés: la cuota mensual + refuerzos ya vienen estiradas
+  // y cada cuota lleva su interés sobre el saldo (como el plan francés), en vez de
+  // montos limpios con cuota de cancelación.
+  const personalizadaConInteres = personalizada && body.plan_interes === true;
   const cuotasManuales = personalizada ? leerCuotasManuales(body.cuotas_manuales) : [];
   const cancelacionVencimiento =
     typeof body.cancelacion_vencimiento === "string" ? body.cancelacion_vencimiento.trim() : "";
@@ -277,7 +282,15 @@ export async function POST(request: Request) {
 
   let plan;
   try {
-    plan = personalizada
+    plan = personalizadaConInteres
+      ? generarPlanPersonalizadoConInteres({
+          precioContado,
+          entregaInicial,
+          cuotas: cuotasManuales,
+          fechaVenta,
+          recargo,
+        })
+      : personalizada
       ? generarPlanManual({
           precioContado,
           entregaInicial,

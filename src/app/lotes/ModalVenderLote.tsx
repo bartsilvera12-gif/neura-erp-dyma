@@ -10,6 +10,8 @@ import { FechaSelect } from "@/components/ui/FechaSelect";
 import {
   generarPlanCuotas,
   generarPlanManual,
+  generarPlanPersonalizadoConInteres,
+  generarCronogramaMensualConInteres,
   diasEntre,
   sumarMeses,
   FRECUENCIAS,
@@ -57,6 +59,8 @@ export interface CondicionesIniciales {
   cuotas_manuales?: { vencimiento: string; monto: number }[] | null;
   /** Solo plan personalizado: fecha de la cuota de cancelación. */
   cancelacion_vencimiento?: string | null;
+  /** Solo plan personalizado: las cuotas llevan interés sobre el saldo (en vez de montos limpios). */
+  plan_interes?: boolean | null;
 }
 
 const inputClass =
@@ -136,10 +140,14 @@ export default function ModalVenderLote({
   // ¿Se aplica el recargo del plazo a la cuota de cancelación? Para planes de
   // montos limpios (ej. mensuales + refuerzos) se apaga.
   const [conRecargo, setConRecargo] = useState(true);
+  // ¿El plan personalizado generado lleva interés sobre el saldo (tipo francés) en
+  // cada cuota? Lo prende el generador cuando se arma "con interés".
+  const [planConInteres, setPlanConInteres] = useState(Boolean(inicial?.plan_interes));
   // Generador: cuota mensual + refuerzos. El sistema estira la cantidad de cuotas
   // mensuales necesarias para cubrir el saldo, con los refuerzos aparte.
-  const [genMonto, setGenMonto] = useState("1800000");
+  const [genMonto, setGenMonto] = useState("2000000");
   const [genDesde, setGenDesde] = useState(hoyYmd());
+  const [genConInteres, setGenConInteres] = useState(true);
   const [refuerzos, setRefuerzos] = useState<{ vencimiento: string; monto: string }[]>([]);
   const [observacion, setObservacion] = useState("");
   const [vendedorId, setVendedorId] = useState("");
@@ -214,14 +222,22 @@ export default function ModalVenderLote({
     try {
       return {
         plan: esPersonalizada
-          ? generarPlanManual({
-              precioContado: Number(precioContado),
-              entregaInicial: Number(entrega),
-              cuotas: cuotasManualesLimpias,
-              cancelacionVencimiento: conCancelacion ? cancelacionVenc : undefined,
-              fechaVenta,
-              recargo: conRecargo ? recargo : 0,
-            })
+          ? planConInteres
+            ? generarPlanPersonalizadoConInteres({
+                precioContado: Number(precioContado),
+                entregaInicial: Number(entrega),
+                cuotas: cuotasManualesLimpias,
+                fechaVenta,
+                recargo,
+              })
+            : generarPlanManual({
+                precioContado: Number(precioContado),
+                entregaInicial: Number(entrega),
+                cuotas: cuotasManualesLimpias,
+                cancelacionVencimiento: conCancelacion ? cancelacionVenc : undefined,
+                fechaVenta,
+                recargo: conRecargo ? recargo : 0,
+              })
           : generarPlanCuotas({
               precioContado: Number(precioContado),
               entregaInicial: Number(entrega),
@@ -247,6 +263,7 @@ export default function ModalVenderLote({
     cancelacionVenc,
     conCancelacion,
     conRecargo,
+    planConInteres,
     fechaVenta,
   ]);
 
@@ -277,11 +294,13 @@ export default function ModalVenderLote({
           precio_contado: Number(precioContado),
           entrega_inicial: Number(entrega),
           cantidad_cuotas: Number(cuotas),
-          recargo_pct: esPersonalizada && !conRecargo ? 0 : recargo,
+          recargo_pct: esPersonalizada && !planConInteres && !conRecargo ? 0 : recargo,
           frecuencia,
           plan_tipo: planTipo,
+          plan_interes: esPersonalizada && planConInteres,
           cuotas_manuales: esPersonalizada ? cuotasManualesLimpias : undefined,
-          cancelacion_vencimiento: esPersonalizada && conCancelacion ? cancelacionVenc : undefined,
+          cancelacion_vencimiento:
+            esPersonalizada && !planConInteres && conCancelacion ? cancelacionVenc : undefined,
           simulacion_id: inicial?.simulacion_id ?? null,
           observacion,
           vendedor_id: vendedorId || null,
@@ -320,6 +339,30 @@ export default function ModalVenderLote({
     const refs = refuerzos
       .filter((r) => Number(r.monto) > 0 && /^\d{4}-\d{2}-\d{2}$/.test(r.vencimiento))
       .map((r) => ({ vencimiento: r.vencimiento, monto: Math.round(Number(r.monto)) }));
+
+    if (genConInteres) {
+      // Plan CON interés: el sistema estira las cuotas cobrando el interés sobre el
+      // saldo (como el plan francés). La última cuota cierra exacto.
+      try {
+        const pagos = generarCronogramaMensualConInteres({
+          capital: financiado,
+          montoMensual: monthly,
+          primerVencimiento: genDesde,
+          fechaVenta,
+          refuerzos: refs,
+          recargo,
+        });
+        setCuotasManuales(pagos.map((c) => ({ vencimiento: c.vencimiento, monto: String(c.monto) })));
+        setConCancelacion(false);
+        setPlanConInteres(true);
+        setErr(null);
+      } catch (e) {
+        setErr(e instanceof Error ? e.message : "No se pudo generar el plan.");
+      }
+      return;
+    }
+
+    // Plan de montos limpios (sin interés): se estira el saldo en cuotas iguales.
     const refsSum = refs.reduce((a, r) => a + r.monto, 0);
     const restante = financiado - refsSum;
     if (restante <= 0) {
@@ -340,6 +383,7 @@ export default function ModalVenderLote({
     );
     setCuotasManuales(todas);
     setConCancelacion(false); // el plan cierra exacto: no hace falta cuota de cancelación
+    setPlanConInteres(false);
     setErr(null);
   }
 
@@ -622,6 +666,17 @@ export default function ModalVenderLote({
                     </div>
                   ))}
                 </div>
+                <label className="mt-2.5 flex items-center gap-2 text-[11px] font-medium text-slate-600">
+                  <input
+                    type="checkbox"
+                    checked={genConInteres}
+                    onChange={(e) => setGenConInteres(e.target.checked)}
+                    className="h-3.5 w-3.5"
+                  />
+                  Agregar interés del {(recargo * 100).toFixed(2).replace(/\.?0+$/, "")}% anual sobre el saldo (como el
+                  plan automático)
+                </label>
+
                 <div className="mt-1.5 flex items-center justify-between">
                   <button
                     type="button"
@@ -639,8 +694,9 @@ export default function ModalVenderLote({
                   </button>
                 </div>
                 <p className="mt-1 text-[10px] text-slate-400">
-                  El sistema calcula cuántas cuotas de ese monto hacen falta para cubrir el saldo (con los refuerzos
-                  aparte) y cierra exacto, sin cuota de cancelación.
+                  {genConInteres
+                    ? "Con interés: cada cuota cobra el interés sobre el saldo que va bajando (como el plan automático), así que se estiran más cuotas. La cuota mensual tiene que superar el interés del primer mes; si no, el sistema avisa."
+                    : "Sin interés (montos limpios): el sistema estira el saldo en cuotas iguales, cierra exacto y no agrega cuota de cancelación."}
                 </p>
               </div>
 
@@ -696,17 +752,25 @@ export default function ModalVenderLote({
                 + Agregar cuota
               </button>
 
-              <label className="mt-3 flex items-center gap-2 text-xs font-medium text-slate-600">
-                <input
-                  type="checkbox"
-                  checked={conCancelacion}
-                  onChange={(e) => setConCancelacion(e.target.checked)}
-                  className="h-3.5 w-3.5"
-                />
-                Agregar cuota final de cancelación (se lleva el saldo restante)
-              </label>
+              {planConInteres ? (
+                <p className="mt-3 rounded-xl border border-sky-200 bg-sky-50 px-3 py-2 text-[11px] text-sky-800">
+                  Plan <b>con interés</b> del {(recargo * 100).toFixed(2).replace(/\.?0+$/, "")}% anual sobre el saldo.
+                  Cada cuota ya incluye su interés y la última cierra exacto. Para volver a montos limpios, destildá
+                  «Agregar interés» y generá de nuevo.
+                </p>
+              ) : (
+                <label className="mt-3 flex items-center gap-2 text-xs font-medium text-slate-600">
+                  <input
+                    type="checkbox"
+                    checked={conCancelacion}
+                    onChange={(e) => setConCancelacion(e.target.checked)}
+                    className="h-3.5 w-3.5"
+                  />
+                  Agregar cuota final de cancelación (se lleva el saldo restante)
+                </label>
+              )}
 
-              {conCancelacion ? (
+              {!planConInteres && conCancelacion ? (
                 <label className="mt-1.5 ml-5 flex items-center gap-2 text-xs text-slate-600">
                   <input
                     type="checkbox"
@@ -718,7 +782,7 @@ export default function ModalVenderLote({
                 </label>
               ) : null}
 
-              {conCancelacion ? (
+              {!planConInteres && conCancelacion ? (
                 <div className="mt-2 rounded-xl border border-slate-200 bg-slate-50/60 p-3">
                   <div className="flex items-center justify-between gap-2">
                     <div>
@@ -753,15 +817,28 @@ export default function ModalVenderLote({
                 <span>
                   Saldo a financiar: <b className="tabular-nums text-slate-700">{fmt(financiado, moneda)}</b>
                 </span>
+                {planConInteres ? (
+                  <>
+                    <span>
+                      Intereses:{" "}
+                      <b className="tabular-nums text-slate-700">{fmt(p?.interes_total ?? 0, moneda)}</b>
+                    </span>
+                    <span>
+                      Total a pagar:{" "}
+                      <b className="tabular-nums text-slate-700">{fmt(p?.monto_financiado ?? 0, moneda)}</b>
+                    </span>
+                  </>
+                ) : (
                 <span>
                   Suma de cuotas: <b className="tabular-nums text-slate-700">{fmt(sumaManual, moneda)}</b>
                 </span>
-                {conCancelacion && recargoMonto > 0 ? (
+                )}
+                {!planConInteres && conCancelacion && recargoMonto > 0 ? (
                   <span>
                     Recargo del plazo: <b className="tabular-nums text-slate-700">{fmt(recargoMonto, moneda)}</b>
                   </span>
                 ) : null}
-                {conCancelacion ? (
+                {planConInteres ? null : conCancelacion ? (
                   <span>
                     Va a la cancelación:{" "}
                     <b className={`tabular-nums ${cancelacionImporte > 0 ? "text-slate-700" : "text-rose-600"}`}>
