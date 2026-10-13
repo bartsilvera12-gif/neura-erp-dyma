@@ -136,10 +136,11 @@ export default function ModalVenderLote({
   // ¿Se aplica el recargo del plazo a la cuota de cancelación? Para planes de
   // montos limpios (ej. mensuales + refuerzos) se apaga.
   const [conRecargo, setConRecargo] = useState(true);
-  // Generador rápido de cuotas mensuales (para no cargarlas una por una).
+  // Generador: cuota mensual + refuerzos. El sistema estira la cantidad de cuotas
+  // mensuales necesarias para cubrir el saldo, con los refuerzos aparte.
   const [genMonto, setGenMonto] = useState("1800000");
   const [genDesde, setGenDesde] = useState(hoyYmd());
-  const [genMeses, setGenMeses] = useState("12");
+  const [refuerzos, setRefuerzos] = useState<{ vencimiento: string; monto: string }[]>([]);
   const [observacion, setObservacion] = useState("");
   const [vendedorId, setVendedorId] = useState("");
   /** En porcentaje, como lo escribe el vendedor ("3"); la API lo pasa a fracción. */
@@ -305,14 +306,41 @@ export default function ModalVenderLote({
     }
   }
 
-  /** Llena las cuotas con una serie mensual del mismo monto (reemplaza las cargadas). */
-  function generarCuotasMensuales() {
-    const n = Math.max(1, Math.min(MAX_CUOTAS, Math.trunc(Number(genMeses) || 0)));
-    const monto = Math.round(Number(genMonto) || 0);
-    if (monto <= 0 || !/^\d{4}-\d{2}-\d{2}$/.test(genDesde)) return;
-    setCuotasManuales(
-      Array.from({ length: n }, (_, i) => ({ vencimiento: sumarMeses(genDesde, i), monto: String(monto) }))
+  /**
+   * Arma el plan: estira las cuotas mensuales que haga falta para cubrir el saldo
+   * a financiar, descontando los refuerzos. La última cuota cierra exacto y no
+   * queda ninguna cuota de cancelación.
+   */
+  function generarPlanMensual() {
+    const monthly = Math.round(Number(genMonto) || 0);
+    if (monthly <= 0 || !/^\d{4}-\d{2}-\d{2}$/.test(genDesde)) {
+      setErr("Cargá la cuota mensual y el primer vencimiento.");
+      return;
+    }
+    const refs = refuerzos
+      .filter((r) => Number(r.monto) > 0 && /^\d{4}-\d{2}-\d{2}$/.test(r.vencimiento))
+      .map((r) => ({ vencimiento: r.vencimiento, monto: Math.round(Number(r.monto)) }));
+    const refsSum = refs.reduce((a, r) => a + r.monto, 0);
+    const restante = financiado - refsSum;
+    if (restante <= 0) {
+      setErr("Los refuerzos ya cubren (o superan) el saldo a financiar. Bajá los refuerzos o la entrega.");
+      return;
+    }
+    const count = Math.max(1, Math.ceil(restante / monthly));
+    if (count > MAX_CUOTAS) {
+      setErr(`Serían ${count} cuotas (más del máximo). Subí el monto de la cuota mensual.`);
+      return;
+    }
+    const mensuales = Array.from({ length: count }, (_, i) => {
+      const monto = i < count - 1 ? monthly : restante - monthly * (count - 1);
+      return { vencimiento: sumarMeses(genDesde, i), monto: String(monto) };
+    });
+    const todas = [...mensuales, ...refs.map((r) => ({ vencimiento: r.vencimiento, monto: String(r.monto) }))].sort(
+      (a, b) => a.vencimiento.localeCompare(b.vencimiento)
     );
+    setCuotasManuales(todas);
+    setConCancelacion(false); // el plan cierra exacto: no hace falta cuota de cancelación
+    setErr(null);
   }
 
   const p = preview.plan;
@@ -539,10 +567,12 @@ export default function ModalVenderLote({
               </div>
 
               <div className="mb-2 rounded-xl border border-dashed border-slate-300 bg-white p-2.5">
-                <p className="mb-1.5 text-[11px] font-semibold text-slate-600">Generar cuotas mensuales iguales</p>
+                <p className="mb-1.5 text-[11px] font-semibold text-slate-600">
+                  Generar plan por cuota mensual
+                </p>
                 <div className="flex flex-wrap items-end gap-2">
                   <div className="min-w-[8rem] flex-1">
-                    <label className={labelClass}>Monto de la cuota</label>
+                    <label className={labelClass}>Cuota mensual</label>
                     <MontoInput
                       value={genMonto}
                       onChange={(n) => setGenMonto(String(n))}
@@ -554,27 +584,63 @@ export default function ModalVenderLote({
                     <label className={labelClass}>Primer vencimiento</label>
                     <FechaSelect value={genDesde} onChange={(e) => setGenDesde(e.target.value)} className={inputClass} />
                   </div>
-                  <div className="w-20">
-                    <label className={labelClass}>Meses</label>
-                    <input
-                      type="number"
-                      min={1}
-                      max={MAX_CUOTAS}
-                      value={genMeses}
-                      onChange={(e) => setGenMeses(e.target.value)}
-                      className={inputClass}
-                    />
-                  </div>
+                </div>
+
+                <p className="mb-1 mt-2.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+                  Refuerzos (opcional)
+                </p>
+                <div className="space-y-1.5">
+                  {refuerzos.map((r, i) => (
+                    <div key={i} className="flex items-center gap-2">
+                      <div className="flex-1">
+                        <FechaSelect
+                          value={r.vencimiento}
+                          onChange={(e) =>
+                            setRefuerzos((prev) => prev.map((x, j) => (j === i ? { ...x, vencimiento: e.target.value } : x)))
+                          }
+                          className={inputClass}
+                        />
+                      </div>
+                      <div className="flex-1">
+                        <MontoInput
+                          value={r.monto}
+                          onChange={(n) =>
+                            setRefuerzos((prev) => prev.map((x, j) => (j === i ? { ...x, monto: String(n) } : x)))
+                          }
+                          decimals={moneda === "USD"}
+                          className={inputClass}
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setRefuerzos((prev) => prev.filter((_, j) => j !== i))}
+                        className="shrink-0 rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-rose-600"
+                        aria-label="Quitar refuerzo"
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+                <div className="mt-1.5 flex items-center justify-between">
                   <button
                     type="button"
-                    onClick={generarCuotasMensuales}
+                    onClick={() => setRefuerzos((prev) => [...prev, { vencimiento: genDesde, monto: "" }])}
+                    className="text-[11px] font-semibold text-[#0EA5E9] hover:underline"
+                  >
+                    + Agregar refuerzo
+                  </button>
+                  <button
+                    type="button"
+                    onClick={generarPlanMensual}
                     className="rounded-xl bg-slate-700 px-3.5 py-2 text-xs font-semibold text-white hover:bg-slate-800"
                   >
-                    Generar
+                    Generar plan
                   </button>
                 </div>
                 <p className="mt-1 text-[10px] text-slate-400">
-                  Reemplaza las cuotas de abajo. Después agregá los refuerzos a mano con “+ Agregar cuota”.
+                  El sistema calcula cuántas cuotas de ese monto hacen falta para cubrir el saldo (con los refuerzos
+                  aparte) y cierra exacto, sin cuota de cancelación.
                 </p>
               </div>
 
@@ -627,7 +693,7 @@ export default function ModalVenderLote({
                 }
                 className="mt-2 text-[11px] font-semibold text-[#0EA5E9] hover:underline"
               >
-                + Agregar cuota / refuerzo
+                + Agregar cuota
               </button>
 
               <label className="mt-3 flex items-center gap-2 text-xs font-medium text-slate-600">
