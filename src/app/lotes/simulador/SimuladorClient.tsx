@@ -17,6 +17,7 @@ import {
   simularPlan,
   generarPlanManual,
   diasEntre,
+  sumarMeses,
   type Frecuencia,
   type Simulacion,
 } from "@/lib/financiacion/plan-cuotas";
@@ -71,6 +72,12 @@ export default function SimuladorClient() {
   const [cancelacionVenc, setCancelacionVenc] = useState(hoyYmd());
   // Cuota final de cancelación opcional (si se apaga, las cuotas deben sumar el financiado).
   const [conCancelacion, setConCancelacion] = useState(true);
+  // ¿Aplicar el recargo del plazo a la cancelación? Se apaga para planes de montos limpios.
+  const [conRecargo, setConRecargo] = useState(true);
+  // Generador rápido de cuotas mensuales.
+  const [genMonto, setGenMonto] = useState("1800000");
+  const [genDesde, setGenDesde] = useState(hoyYmd());
+  const [genMeses, setGenMeses] = useState("12");
 
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [lotes, setLotes] = useState<Lote[]>([]);
@@ -128,9 +135,18 @@ export default function SimuladorClient() {
     () =>
       cuotasManuales
         .filter((c) => Number(c.monto) > 0)
-        .map((c) => ({ vencimiento: c.vencimiento, monto: Number(c.monto) })),
+        .map((c) => ({ vencimiento: c.vencimiento, monto: Number(c.monto) }))
+        .sort((a, b) => a.vencimiento.localeCompare(b.vencimiento)),
     [cuotasManuales]
   );
+  function generarCuotasMensuales() {
+    const n = Math.max(1, Math.min(MAX_CUOTAS, Math.trunc(Number(genMeses) || 0)));
+    const monto = Math.round(Number(genMonto) || 0);
+    if (monto <= 0 || !/^\d{4}-\d{2}-\d{2}$/.test(genDesde)) return;
+    setCuotasManuales(
+      Array.from({ length: n }, (_, i) => ({ vencimiento: sumarMeses(genDesde, i), monto: String(monto) }))
+    );
+  }
   const financiado = Math.max(0, Math.round(Number(precio) || 0) - Math.round(Number(entrega) || 0));
   const sumaManual = cuotasManualesLimpias.reduce((a, c) => a + c.monto, 0);
   const saldoCancelacion = financiado - sumaManual;
@@ -140,7 +156,7 @@ export default function SimuladorClient() {
     conCancelacion && /^\d{4}-\d{2}-\d{2}$/.test(cancelacionVenc)
       ? Math.max(0, diasEntre(hoyYmd(), cancelacionVenc)) / 365
       : 0;
-  const recargoMonto = conCancelacion ? Math.round(financiado * recargoTasaSim * aniosPlazoSim) : 0;
+  const recargoMonto = conCancelacion && conRecargo ? Math.round(financiado * recargoTasaSim * aniosPlazoSim) : 0;
   const cancelacionImporte = saldoCancelacion + recargoMonto;
 
   /** El cálculo corre en cada tecla: es la herramienta de análisis que se pide. */
@@ -153,7 +169,7 @@ export default function SimuladorClient() {
           cuotas: cuotasManualesLimpias,
           cancelacionVencimiento: conCancelacion ? cancelacionVenc : undefined,
           fechaVenta: hoyYmd(),
-          recargo: recargoTasaSim,
+          recargo: conRecargo ? recargoTasaSim : 0,
         });
         const ultima = base.cuotas[base.cuotas.length - 1];
         const plan: Simulacion = {
@@ -196,6 +212,7 @@ export default function SimuladorClient() {
     cuotasManualesLimpias,
     cancelacionVenc,
     conCancelacion,
+    conRecargo,
     recargoTasaSim,
   ]);
 
@@ -252,7 +269,7 @@ export default function SimuladorClient() {
           nombre: nombre.trim() || null,
           precio_contado: Number(precio),
           entrega_inicial: Number(entrega),
-          recargo_pct: Number(recargoPct) / 100,
+          recargo_pct: esPersonalizada && !conRecargo ? 0 : Number(recargoPct) / 100,
           frecuencia,
           primer_vencimiento: esPersonalizada ? cuotasManualesLimpias[0]?.vencimiento ?? "" : primerVencimiento,
           cantidad_cuotas: modo === "por_cantidad" ? Number(cantidadCuotas) : null,
@@ -474,6 +491,42 @@ export default function SimuladorClient() {
                 <p className="text-xs font-semibold text-slate-600">Cuotas del plan</p>
                 <span className="text-[10px] text-slate-400">Montos sin interés</span>
               </div>
+
+              <div className="mb-2 rounded-xl border border-dashed border-slate-300 bg-white p-2.5">
+                <p className="mb-1.5 text-[11px] font-semibold text-slate-600">Generar cuotas mensuales iguales</p>
+                <div className="flex flex-wrap items-end gap-2">
+                  <div className="min-w-[8rem] flex-1">
+                    <label className={labelClass}>Monto de la cuota</label>
+                    <MontoInput value={genMonto} onChange={(n) => setGenMonto(String(n))} decimals={false} className={inputClass} />
+                  </div>
+                  <div className="flex-1">
+                    <label className={labelClass}>Primer vencimiento</label>
+                    <FechaSelect value={genDesde} onChange={(e) => setGenDesde(e.target.value)} className={inputClass} />
+                  </div>
+                  <div className="w-20">
+                    <label className={labelClass}>Meses</label>
+                    <input
+                      type="number"
+                      min={1}
+                      max={MAX_CUOTAS}
+                      value={genMeses}
+                      onChange={(e) => setGenMeses(e.target.value)}
+                      className={inputClass}
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={generarCuotasMensuales}
+                    className="rounded-xl bg-slate-700 px-3.5 py-2 text-xs font-semibold text-white hover:bg-slate-800"
+                  >
+                    Generar
+                  </button>
+                </div>
+                <p className="mt-1 text-[10px] text-slate-400">
+                  Reemplaza las cuotas de abajo. Después agregá los refuerzos a mano con “+ Agregar cuota”.
+                </p>
+              </div>
+
               <div className="space-y-2">
                 {cuotasManuales.map((c, i) => (
                   <div key={i} className="flex items-center gap-2">
@@ -524,7 +577,7 @@ export default function SimuladorClient() {
                 }
                 className="mt-2 text-[11px] font-semibold text-[#0EA5E9] hover:underline"
               >
-                + Agregar cuota
+                + Agregar cuota / refuerzo
               </button>
 
               <label className="mt-3 flex items-center gap-2 text-xs font-medium text-slate-600">
@@ -536,6 +589,18 @@ export default function SimuladorClient() {
                 />
                 Agregar cuota final de cancelación (se lleva el saldo restante)
               </label>
+
+              {conCancelacion ? (
+                <label className="mt-1.5 ml-5 flex items-center gap-2 text-xs text-slate-600">
+                  <input
+                    type="checkbox"
+                    checked={conRecargo}
+                    onChange={(e) => setConRecargo(e.target.checked)}
+                    className="h-3.5 w-3.5"
+                  />
+                  Aplicar recargo del plazo (15% anual) — apagá esto para un plan de montos limpios
+                </label>
+              ) : null}
 
               {conCancelacion ? (
                 <div className="mt-2 rounded-xl border border-slate-200 bg-white p-3">

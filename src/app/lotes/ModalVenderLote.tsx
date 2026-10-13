@@ -11,6 +11,7 @@ import {
   generarPlanCuotas,
   generarPlanManual,
   diasEntre,
+  sumarMeses,
   FRECUENCIAS,
   MAX_CUOTAS,
   DIAS_GRACIA,
@@ -132,6 +133,13 @@ export default function ModalVenderLote({
   const [conCancelacion, setConCancelacion] = useState(
     inicial?.plan_tipo === "personalizada" ? Boolean(inicial?.cancelacion_vencimiento) : true
   );
+  // ¿Se aplica el recargo del plazo a la cuota de cancelación? Para planes de
+  // montos limpios (ej. mensuales + refuerzos) se apaga.
+  const [conRecargo, setConRecargo] = useState(true);
+  // Generador rápido de cuotas mensuales (para no cargarlas una por una).
+  const [genMonto, setGenMonto] = useState("1800000");
+  const [genDesde, setGenDesde] = useState(hoyYmd());
+  const [genMeses, setGenMeses] = useState("12");
   const [observacion, setObservacion] = useState("");
   const [vendedorId, setVendedorId] = useState("");
   /** En porcentaje, como lo escribe el vendedor ("3"); la API lo pasa a fracción. */
@@ -184,7 +192,9 @@ export default function ModalVenderLote({
     () =>
       cuotasManuales
         .filter((c) => Number(c.monto) > 0)
-        .map((c) => ({ vencimiento: c.vencimiento, monto: Number(c.monto) })),
+        .map((c) => ({ vencimiento: c.vencimiento, monto: Number(c.monto) }))
+        // Ordenadas por fecha: así un refuerzo cargado al final cae en su lugar.
+        .sort((a, b) => a.vencimiento.localeCompare(b.vencimiento)),
     [cuotasManuales]
   );
   const financiado = Math.max(0, Math.round(Number(precioContado) || 0) - Math.round(Number(entrega) || 0));
@@ -195,7 +205,7 @@ export default function ModalVenderLote({
     conCancelacion && /^\d{4}-\d{2}-\d{2}$/.test(fechaVenta) && /^\d{4}-\d{2}-\d{2}$/.test(cancelacionVenc)
       ? Math.max(0, diasEntre(fechaVenta, cancelacionVenc)) / 365
       : 0;
-  const recargoMonto = conCancelacion ? Math.round(financiado * recargo * aniosPlazo) : 0;
+  const recargoMonto = conCancelacion && conRecargo ? Math.round(financiado * recargo * aniosPlazo) : 0;
   const cancelacionImporte = saldoCancelacion + recargoMonto;
 
   /** Vista previa del plan. Si los datos no cierran, el motor avisa por qué. */
@@ -209,7 +219,7 @@ export default function ModalVenderLote({
               cuotas: cuotasManualesLimpias,
               cancelacionVencimiento: conCancelacion ? cancelacionVenc : undefined,
               fechaVenta,
-              recargo,
+              recargo: conRecargo ? recargo : 0,
             })
           : generarPlanCuotas({
               precioContado: Number(precioContado),
@@ -235,6 +245,7 @@ export default function ModalVenderLote({
     cuotasManualesLimpias,
     cancelacionVenc,
     conCancelacion,
+    conRecargo,
     fechaVenta,
   ]);
 
@@ -265,7 +276,7 @@ export default function ModalVenderLote({
           precio_contado: Number(precioContado),
           entrega_inicial: Number(entrega),
           cantidad_cuotas: Number(cuotas),
-          recargo_pct: recargo,
+          recargo_pct: esPersonalizada && !conRecargo ? 0 : recargo,
           frecuencia,
           plan_tipo: planTipo,
           cuotas_manuales: esPersonalizada ? cuotasManualesLimpias : undefined,
@@ -292,6 +303,16 @@ export default function ModalVenderLote({
     } finally {
       setGuardando(false);
     }
+  }
+
+  /** Llena las cuotas con una serie mensual del mismo monto (reemplaza las cargadas). */
+  function generarCuotasMensuales() {
+    const n = Math.max(1, Math.min(MAX_CUOTAS, Math.trunc(Number(genMeses) || 0)));
+    const monto = Math.round(Number(genMonto) || 0);
+    if (monto <= 0 || !/^\d{4}-\d{2}-\d{2}$/.test(genDesde)) return;
+    setCuotasManuales(
+      Array.from({ length: n }, (_, i) => ({ vencimiento: sumarMeses(genDesde, i), monto: String(monto) }))
+    );
   }
 
   const p = preview.plan;
@@ -516,6 +537,47 @@ export default function ModalVenderLote({
                 <label className={labelClass + " mb-0"}>Cuotas del plan</label>
                 <span className="text-[10px] text-slate-400">Montos sin interés</span>
               </div>
+
+              <div className="mb-2 rounded-xl border border-dashed border-slate-300 bg-white p-2.5">
+                <p className="mb-1.5 text-[11px] font-semibold text-slate-600">Generar cuotas mensuales iguales</p>
+                <div className="flex flex-wrap items-end gap-2">
+                  <div className="min-w-[8rem] flex-1">
+                    <label className={labelClass}>Monto de la cuota</label>
+                    <MontoInput
+                      value={genMonto}
+                      onChange={(n) => setGenMonto(String(n))}
+                      decimals={moneda === "USD"}
+                      className={inputClass}
+                    />
+                  </div>
+                  <div className="flex-1">
+                    <label className={labelClass}>Primer vencimiento</label>
+                    <FechaSelect value={genDesde} onChange={(e) => setGenDesde(e.target.value)} className={inputClass} />
+                  </div>
+                  <div className="w-20">
+                    <label className={labelClass}>Meses</label>
+                    <input
+                      type="number"
+                      min={1}
+                      max={MAX_CUOTAS}
+                      value={genMeses}
+                      onChange={(e) => setGenMeses(e.target.value)}
+                      className={inputClass}
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={generarCuotasMensuales}
+                    className="rounded-xl bg-slate-700 px-3.5 py-2 text-xs font-semibold text-white hover:bg-slate-800"
+                  >
+                    Generar
+                  </button>
+                </div>
+                <p className="mt-1 text-[10px] text-slate-400">
+                  Reemplaza las cuotas de abajo. Después agregá los refuerzos a mano con “+ Agregar cuota”.
+                </p>
+              </div>
+
               <div className="space-y-2">
                 {cuotasManuales.map((c, i) => (
                   <div key={i} className="flex items-center gap-2">
@@ -565,7 +627,7 @@ export default function ModalVenderLote({
                 }
                 className="mt-2 text-[11px] font-semibold text-[#0EA5E9] hover:underline"
               >
-                + Agregar cuota
+                + Agregar cuota / refuerzo
               </button>
 
               <label className="mt-3 flex items-center gap-2 text-xs font-medium text-slate-600">
@@ -577,6 +639,18 @@ export default function ModalVenderLote({
                 />
                 Agregar cuota final de cancelación (se lleva el saldo restante)
               </label>
+
+              {conCancelacion ? (
+                <label className="mt-1.5 ml-5 flex items-center gap-2 text-xs text-slate-600">
+                  <input
+                    type="checkbox"
+                    checked={conRecargo}
+                    onChange={(e) => setConRecargo(e.target.checked)}
+                    className="h-3.5 w-3.5"
+                  />
+                  Aplicar recargo del plazo (15% anual) — apagá esto para un plan de montos limpios
+                </label>
+              ) : null}
 
               {conCancelacion ? (
                 <div className="mt-2 rounded-xl border border-slate-200 bg-slate-50/60 p-3">
