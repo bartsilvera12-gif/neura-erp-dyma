@@ -370,7 +370,7 @@ export default function ModalVenderLote({
         capital: c.capital,
         interes: c.interes,
         total: c.total,
-        es_cancelacion: esPersonalizada && c.numero === p.cuotas.length,
+        es_cancelacion: esPersonalizada && conCancelacion && c.numero === p.cuotas.length,
       })),
     });
     const w = window.open("", "_blank");
@@ -822,7 +822,10 @@ export default function ModalVenderLote({
                 <>
                   <Dato titulo="Saldo financiado" valor={fmt(p.capital, moneda)} />
                   <Dato titulo="Cuotas" valor={String(p.cuotas.length)} />
-                  <Dato titulo="Cancelación" valor={fmt(p.cuotas[p.cuotas.length - 1]?.total ?? 0, moneda)} />
+                  <Dato
+                    titulo={conCancelacion ? "Cancelación" : "Última cuota"}
+                    valor={fmt(p.cuotas[p.cuotas.length - 1]?.total ?? 0, moneda)}
+                  />
                   <Dato titulo="Total a pagar" valor={fmt(p.monto_financiado, moneda)} destacado />
                 </>
               ) : (
@@ -862,7 +865,7 @@ export default function ModalVenderLote({
                     <tr key={c.numero}>
                       <td className="px-3 py-1.5 text-slate-700">
                         {c.numero}
-                        {esPersonalizada && c.numero === p.cuotas.length ? (
+                        {esPersonalizada && conCancelacion && c.numero === p.cuotas.length ? (
                           <span className="ml-1 rounded bg-amber-100 px-1 py-0.5 text-[9px] font-semibold text-amber-700">
                             Cancelación
                           </span>

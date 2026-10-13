@@ -268,7 +268,7 @@ export default function SimuladorClient() {
         capital: c.capital,
         interes: c.interes,
         total: c.total,
-        es_cancelacion: esPersonalizada && c.numero === p.cuotas.length,
+        es_cancelacion: esPersonalizada && conCancelacion && c.numero === p.cuotas.length,
       })),
     });
     const w = window.open("", "_blank");
@@ -874,7 +874,9 @@ export default function SimuladorClient() {
               <div className="rounded-2xl border-2 border-[#0EA5E9] bg-sky-50/50 p-4">
                 <p className="text-3xl font-bold tabular-nums text-[#0EA5E9]">{p.cantidad_cuotas}</p>
                 {esPersonalizada ? (
-                  <p className="text-xs font-semibold text-slate-600">cuotas personalizadas (incluida la cancelación)</p>
+                  <p className="text-xs font-semibold text-slate-600">
+                    cuotas personalizadas{conCancelacion ? " (incluida la cancelación)" : ""}
+                  </p>
                 ) : (
                   <p className="text-xs font-semibold text-slate-600">
                     cuotas {FRECUENCIAS[p.frecuencia].label.toLowerCase()}es de{" "}
@@ -934,7 +936,7 @@ export default function SimuladorClient() {
                       <tr key={c.numero}>
                         <td className="px-3 py-1.5 text-slate-600">
                           {c.numero}
-                          {esPersonalizada && c.numero === p.cuotas.length ? (
+                          {esPersonalizada && conCancelacion && c.numero === p.cuotas.length ? (
                             <span className="ml-1 rounded bg-amber-100 px-1 py-0.5 text-[9px] font-semibold text-amber-700">
                               Cancelación
                             </span>
