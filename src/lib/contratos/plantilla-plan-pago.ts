@@ -1,4 +1,4 @@
-import { guaraniesEnLetras } from "./numero-a-letras";
+import { importeEnLetras, montoEnCifras } from "./numero-a-letras";
 import type { DatosContrato } from "./types";
 
 /**
@@ -22,10 +22,6 @@ function esc(v: unknown): string {
     .replace(/"/g, "&quot;");
 }
 
-function gs(n: number): string {
-  return `Gs. ${Math.round(Number(n) || 0).toLocaleString("es-PY")}`;
-}
-
 function fmtFecha(ymd: string): string {
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(ymd).slice(0, 10));
   return m ? `${m[3]}/${m[2]}/${m[1]}` : "—";
@@ -45,6 +41,10 @@ export function plantillaPlanPago(
 ): string {
   const { config, comprador, conyuge, inmueble, operacion, cuotas } = datos;
   const logo = opciones?.logoUrl ?? datos.logoUrl;
+
+  // El plan hereda la moneda del contrato al que pertenece.
+  const moneda = operacion.moneda === "USD" ? "USD" : "GS";
+  const gs = (n: number): string => montoEnCifras(n, moneda);
 
   const porNumero = new Map(estados.map((e) => [e.numero, e]));
   const pagadas = cuotas.filter((c) => porNumero.get(c.numero)?.pagada).length;
@@ -151,7 +151,7 @@ export function plantillaPlanPago(
 </table>
 
 <p class="pie">Saldo pendiente a la fecha: <strong>${gs(saldoTotal)}</strong>
-(Guaraníes ${esc(guaraniesEnLetras(saldoTotal))}). Los importes no incluyen la mora que pudiera
+(${esc(importeEnLetras(saldoTotal, moneda))}). Los importes no incluyen la mora que pudiera
 corresponder por cuotas vencidas, que se calcula al momento del cobro.</p>
 
 <div class="firmas">

@@ -110,6 +110,10 @@ export default function ModalVenderLote({
   const [codeudores, setCodeudores] = useState<ParteContrato[]>([]);
   const [fechaVenta, setFechaVenta] = useState(hoyYmd());
   const [primerVencimiento, setPrimerVencimiento] = useState(inicial?.primer_vencimiento ?? hoyYmd());
+  // La moneda arranca en la del lote, pero se puede cambiar para esta venta:
+  // el importe que carga el vendedor queda expresado en la moneda elegida y es la
+  // que se congela en el contrato.
+  const [moneda, setMoneda] = useState<"GS" | "USD">(lote.moneda === "USD" ? "USD" : "GS");
   const [precioContado, setPrecioContado] = useState(
     String(inicial?.precio_contado ?? lote.precio_contado ?? lote.precio_financiado ?? 0)
   );
@@ -175,7 +179,6 @@ export default function ModalVenderLote({
     setComision(v ? String(Math.round(v.comision_pct * 1e6) / 1e4) : "0");
   }
 
-  const moneda = lote.moneda;
   const esPersonalizada = planTipo === "personalizada";
 
   // Cuotas personalizadas con monto cargado (las vacías se ignoran para la previa).
@@ -264,6 +267,7 @@ export default function ModalVenderLote({
           precio_contado: Number(precioContado),
           entrega_inicial: Number(entrega),
           cantidad_cuotas: Number(cuotas),
+          moneda,
           recargo_pct: recargo,
           frecuencia,
           plan_tipo: planTipo,
@@ -422,6 +426,20 @@ export default function ModalVenderLote({
               />
             </div>
           ) : null}
+          <div className="sm:col-span-2">
+            <label className={labelClass}>Moneda</label>
+            <FancySelect
+              value={moneda}
+              onChange={(v) => setMoneda(v === "USD" ? "USD" : "GS")}
+              options={[
+                { value: "GS", label: "Guaraníes (Gs.)" },
+                { value: "USD", label: "Dólares (USD)" },
+              ]}
+            />
+            <p className="mt-1 text-[10px] text-slate-400">
+              Los importes de esta venta y del contrato quedan en la moneda elegida.
+            </p>
+          </div>
           <div>
             <label className={labelClass}>Precio de contado</label>
             <MontoInput

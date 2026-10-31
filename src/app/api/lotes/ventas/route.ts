@@ -351,7 +351,10 @@ export async function POST(request: Request) {
     }
 
     const numeroContrato = await siguienteNumeroContrato(sb, empresaId);
-    const moneda = (lote as { moneda?: string }).moneda === "USD" ? "USD" : "GS";
+    // La moneda la elige el vendedor en el formulario; si no viene, se hereda la
+    // del lote. Es la que se congela en el contrato y manda sobre los documentos.
+    const monedaForm = body.moneda === "USD" ? "USD" : body.moneda === "GS" ? "GS" : null;
+    const moneda = monedaForm ?? ((lote as { moneda?: string }).moneda === "USD" ? "USD" : "GS");
 
     const { data: venta, error: errVenta } = await sb
       .from("lote_ventas")

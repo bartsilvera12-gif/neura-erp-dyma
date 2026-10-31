@@ -1,4 +1,4 @@
-import { fechaEnLetras, guaraniesEnLetras } from "./numero-a-letras";
+import { fechaEnLetras, importeEnLetras, montoEnCifras } from "./numero-a-letras";
 import type { Pagare } from "./pagares";
 import type { DatosContrato } from "./types";
 
@@ -25,10 +25,6 @@ function d(v: unknown, largo = 24): string {
   return s ? esc(s) : "_".repeat(largo);
 }
 
-function gs(n: number): string {
-  return `Gs. ${Math.round(Number(n) || 0).toLocaleString("es-PY")}`;
-}
-
 function fmtFecha(ymd: string): string {
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(ymd).slice(0, 10));
   return m ? `${m[3]}/${m[2]}/${m[1]}` : "____/____/______";
@@ -40,6 +36,10 @@ export function plantillaPagares(
   opciones?: { autoImprimir?: boolean; titulo?: string }
 ): string {
   const { config, comprador, conyuge, codeudores, operacion, inmueble } = datos;
+
+  // Los pagarés se emiten en la moneda del contrato, igual que el documento.
+  const moneda = operacion.moneda === "USD" ? "USD" : "GS";
+  const gs = (n: number): string => montoEnCifras(n, moneda);
 
   const deudores = [comprador, ...(conyuge ? [conyuge] : [])];
   const plural = deudores.length > 1;
@@ -114,7 +114,7 @@ export function plantillaPagares(
   ${plural ? "los abajo firmantes se obligan" : "el/la abajo firmante se obliga"} a pagar incondicionalmente
   a la orden de <strong>${esc(config.razon_social)}</strong>${config.ruc ? `, RUC N° ${esc(config.ruc)}` : ""},
   o a su orden, la suma de <strong>${gs(p.monto)}</strong>
-  (Guaraníes ${esc(guaraniesEnLetras(p.monto))}), pagadera el
+  (${esc(importeEnLetras(p.monto, moneda))}), pagadera el
   <strong>${esc(fmtFecha(p.vencimiento))}</strong>, sin protesto.</p>
 
   <p>${plural ? "Deudores" : "Deudor"}: ${nombresDeudores}.</p>

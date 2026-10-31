@@ -1,4 +1,4 @@
-import { fechaEnLetras, guaraniesEnLetras } from "./numero-a-letras";
+import { fechaEnLetras, guaraniesEnLetras, importeEnLetras, montoEnCifras } from "./numero-a-letras";
 import type { DatosContrato, PersonaContrato } from "./types";
 
 /**
@@ -29,10 +29,6 @@ function d(v: unknown, largo = 24): string {
   return s ? esc(s) : "_".repeat(largo);
 }
 
-function gs(n: number): string {
-  return `Gs. ${Math.round(Number(n) || 0).toLocaleString("es-PY")}`;
-}
-
 function fmtFecha(ymd: string): string {
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(ymd).slice(0, 10));
   return m ? `${m[3]}/${m[2]}/${m[1]}` : "____/____/______";
@@ -55,6 +51,11 @@ function filaDato(label: string, valor: unknown): string {
 
 export function plantillaCompraventaPlazos(datos: DatosContrato, opciones?: { autoImprimir?: boolean }): string {
   const { config, comprador, conyuge, codeudores, inmueble, operacion, cuotas } = datos;
+
+  // La moneda del contrato manda sobre cómo se escriben todos los importes:
+  // el símbolo en cifras y el nombre de la moneda en el texto en letras.
+  const moneda = operacion.moneda === "USD" ? "USD" : "GS";
+  const gs = (n: number): string => montoEnCifras(n, moneda);
 
   const compradores = [comprador, ...(conyuge ? [conyuge] : [])];
   const plural = compradores.length > 1;
@@ -93,11 +94,11 @@ export function plantillaCompraventaPlazos(datos: DatosContrato, opciones?: { au
     operacion.entrega_inicial > 0
       ? `De dicho precio, ${COMPRADOR} abona en este acto la suma de <strong>${gs(
           operacion.entrega_inicial
-        )}</strong> (Guaraníes ${esc(
-          guaraniesEnLetras(operacion.entrega_inicial)
+        )}</strong> (${esc(
+          importeEnLetras(operacion.entrega_inicial, moneda)
         )}) en concepto de entrega inicial, sirviendo el presente de suficiente recibo, y el saldo de
-        <strong>${gs(operacion.monto_financiado)}</strong> (Guaraníes ${esc(
-          guaraniesEnLetras(operacion.monto_financiado)
+        <strong>${gs(operacion.monto_financiado)}</strong> (${esc(
+          importeEnLetras(operacion.monto_financiado, moneda)
         )}) será abonado`
       : `Dicho precio será abonado`;
 
@@ -278,12 +279,12 @@ del loteamiento la ubicación, dimensiones y linderos del Lote, conforme al plan
 Municipalidad, manifestando su plena conformidad con el mismo.</p>
 
 <h3>Cláusula Tercera — Precio y forma de pago</h3>
-<p>El precio total de venta del Lote es de <strong>${gs(operacion.precio_total)}</strong> (Guaraníes ${esc(
-    guaraniesEnLetras(operacion.precio_total)
+<p>El precio total de venta del Lote es de <strong>${gs(operacion.precio_total)}</strong> (${esc(
+    importeEnLetras(operacion.precio_total, moneda)
   )}), IVA incluido. ${entregaHtml} en <strong>${operacion.cantidad_cuotas}</strong>
 (${esc(guaraniesEnLetras(operacion.cantidad_cuotas).toLowerCase())}) cuotas mensuales, iguales y consecutivas, de
-<strong>${gs(operacion.cuota)}</strong> (Guaraníes ${esc(
-    guaraniesEnLetras(operacion.cuota)
+<strong>${gs(operacion.cuota)}</strong> (${esc(
+    importeEnLetras(operacion.cuota, moneda)
   )}) cada una, con vencimiento de la primera el día ${esc(
     fmtFecha(operacion.primer_vencimiento)
   )}, y las siguientes en igual fecha de cada mes subsiguiente, hasta la total cancelación del precio.</p>
