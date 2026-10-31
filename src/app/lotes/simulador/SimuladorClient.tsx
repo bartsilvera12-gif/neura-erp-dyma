@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, Check, RefreshCw, Save, Trash2, Undo2, X } from "lucide-react";
+import { ArrowLeft, Check, FileDown, RefreshCw, Save, Trash2, Undo2, X } from "lucide-react";
 import { fetchWithSupabaseSession } from "@/lib/api/fetch-with-supabase-session";
 import { getClientes } from "@/lib/clientes/storage";
 import SmartSearchSelect, { type SmartOption } from "@/components/ui/SmartSearchSelect";
@@ -16,11 +16,15 @@ import {
   RECARGO_FINANCIACION,
   simularPlan,
   generarPlanManual,
+  generarPlanPersonalizadoConInteres,
+  generarCronogramaMensualConInteres,
   diasEntre,
+  sumarMeses,
   type Frecuencia,
   type Simulacion,
 } from "@/lib/financiacion/plan-cuotas";
 import { ESTADO_SIMULACION_UI, type SimulacionGuardada } from "@/lib/financiacion/simulaciones";
+import { plantillaSimulacion } from "@/lib/financiacion/plantilla-simulacion";
 import type { Cliente } from "@/lib/clientes/types";
 import type { Lote } from "@/lib/lotes/types";
 
@@ -70,6 +74,15 @@ export default function SimuladorClient() {
   const [cancelacionVenc, setCancelacionVenc] = useState(hoyYmd());
   // Cuota final de cancelación opcional (si se apaga, las cuotas deben sumar el financiado).
   const [conCancelacion, setConCancelacion] = useState(true);
+  // ¿Aplicar el recargo del plazo a la cancelación? Se apaga para planes de montos limpios.
+  const [conRecargo, setConRecargo] = useState(true);
+  // ¿El plan personalizado generado lleva interés sobre el saldo (tipo francés)?
+  const [planConInteres, setPlanConInteres] = useState(false);
+  // Generador: cuota mensual + refuerzos (el sistema estira las cuotas necesarias).
+  const [genMonto, setGenMonto] = useState("2000000");
+  const [genDesde, setGenDesde] = useState(hoyYmd());
+  const [genConInteres, setGenConInteres] = useState(true);
+  const [refuerzos, setRefuerzos] = useState<{ vencimiento: string; monto: string }[]>([]);
 
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [lotes, setLotes] = useState<Lote[]>([]);
@@ -127,9 +140,63 @@ export default function SimuladorClient() {
     () =>
       cuotasManuales
         .filter((c) => Number(c.monto) > 0)
-        .map((c) => ({ vencimiento: c.vencimiento, monto: Number(c.monto) })),
+        .map((c) => ({ vencimiento: c.vencimiento, monto: Number(c.monto) }))
+        .sort((a, b) => a.vencimiento.localeCompare(b.vencimiento)),
     [cuotasManuales]
   );
+  function generarPlanMensual() {
+    const monthly = Math.round(Number(genMonto) || 0);
+    if (monthly <= 0 || !/^\d{4}-\d{2}-\d{2}$/.test(genDesde)) {
+      setErr("Cargá la cuota mensual y el primer vencimiento.");
+      return;
+    }
+    const refs = refuerzos
+      .filter((r) => Number(r.monto) > 0 && /^\d{4}-\d{2}-\d{2}$/.test(r.vencimiento))
+      .map((r) => ({ vencimiento: r.vencimiento, monto: Math.round(Number(r.monto)) }));
+
+    if (genConInteres) {
+      try {
+        const pagos = generarCronogramaMensualConInteres({
+          capital: financiado,
+          montoMensual: monthly,
+          primerVencimiento: genDesde,
+          fechaVenta: hoyYmd(),
+          refuerzos: refs,
+          recargo: recargoTasaSim,
+        });
+        setCuotasManuales(pagos.map((c) => ({ vencimiento: c.vencimiento, monto: String(c.monto) })));
+        setConCancelacion(false);
+        setPlanConInteres(true);
+        setErr(null);
+      } catch (e) {
+        setErr(e instanceof Error ? e.message : "No se pudo generar el plan.");
+      }
+      return;
+    }
+
+    const refsSum = refs.reduce((a, r) => a + r.monto, 0);
+    const restante = financiado - refsSum;
+    if (restante <= 0) {
+      setErr("Los refuerzos ya cubren el saldo a financiar. Bajá los refuerzos o la entrega.");
+      return;
+    }
+    const count = Math.max(1, Math.ceil(restante / monthly));
+    if (count > MAX_CUOTAS) {
+      setErr(`Serían ${count} cuotas (más del máximo). Subí el monto de la cuota mensual.`);
+      return;
+    }
+    const mensuales = Array.from({ length: count }, (_, i) => {
+      const monto = i < count - 1 ? monthly : restante - monthly * (count - 1);
+      return { vencimiento: sumarMeses(genDesde, i), monto: String(monto) };
+    });
+    const todas = [...mensuales, ...refs.map((r) => ({ vencimiento: r.vencimiento, monto: String(r.monto) }))].sort(
+      (a, b) => a.vencimiento.localeCompare(b.vencimiento)
+    );
+    setCuotasManuales(todas);
+    setConCancelacion(false);
+    setPlanConInteres(false);
+    setErr(null);
+  }
   const financiado = Math.max(0, Math.round(Number(precio) || 0) - Math.round(Number(entrega) || 0));
   const sumaManual = cuotasManualesLimpias.reduce((a, c) => a + c.monto, 0);
   const saldoCancelacion = financiado - sumaManual;
@@ -139,21 +206,29 @@ export default function SimuladorClient() {
     conCancelacion && /^\d{4}-\d{2}-\d{2}$/.test(cancelacionVenc)
       ? Math.max(0, diasEntre(hoyYmd(), cancelacionVenc)) / 365
       : 0;
-  const recargoMonto = conCancelacion ? Math.round(financiado * recargoTasaSim * aniosPlazoSim) : 0;
+  const recargoMonto = conCancelacion && conRecargo ? Math.round(financiado * recargoTasaSim * aniosPlazoSim) : 0;
   const cancelacionImporte = saldoCancelacion + recargoMonto;
 
   /** El cálculo corre en cada tecla: es la herramienta de análisis que se pide. */
   const resultado = useMemo(() => {
     try {
       if (esPersonalizada) {
-        const base = generarPlanManual({
-          precioContado: Number(precio),
-          entregaInicial: Number(entrega),
-          cuotas: cuotasManualesLimpias,
-          cancelacionVencimiento: conCancelacion ? cancelacionVenc : undefined,
-          fechaVenta: hoyYmd(),
-          recargo: recargoTasaSim,
-        });
+        const base = planConInteres
+          ? generarPlanPersonalizadoConInteres({
+              precioContado: Number(precio),
+              entregaInicial: Number(entrega),
+              cuotas: cuotasManualesLimpias,
+              fechaVenta: hoyYmd(),
+              recargo: recargoTasaSim,
+            })
+          : generarPlanManual({
+              precioContado: Number(precio),
+              entregaInicial: Number(entrega),
+              cuotas: cuotasManualesLimpias,
+              cancelacionVencimiento: conCancelacion ? cancelacionVenc : undefined,
+              fechaVenta: hoyYmd(),
+              recargo: conRecargo ? recargoTasaSim : 0,
+            });
         const ultima = base.cuotas[base.cuotas.length - 1];
         const plan: Simulacion = {
           ...base,
@@ -195,10 +270,49 @@ export default function SimuladorClient() {
     cuotasManualesLimpias,
     cancelacionVenc,
     conCancelacion,
+    conRecargo,
+    planConInteres,
     recargoTasaSim,
   ]);
 
   const p = resultado.plan;
+
+  /** Abre el plan simulado como documento imprimible (ver o guardar PDF). */
+  function verPdfSimulacion() {
+    if (!p) return;
+    const cli = clientes.find((x) => x.id === clienteId);
+    const loteSel = lotes.find((x) => x.id === loteId);
+    const html = plantillaSimulacion({
+      cliente: cli ? ((cli.empresa ?? cli.nombre_contacto) || "").trim() || null : null,
+      lote: loteSel ? `Lote ${loteSel.numero}` : null,
+      moneda: loteSel?.moneda ?? "GS",
+      emitida: hoyYmd(),
+      precio_contado: p.precio_contado,
+      entrega_inicial: p.entrega_inicial,
+      capital: p.capital,
+      interes_total: p.interes_total,
+      monto_financiado: p.monto_financiado,
+      total_operacion: p.total_operacion,
+      cantidad_cuotas: p.cuotas.length,
+      cuota: p.cuota,
+      frecuencia: esPersonalizada ? undefined : FRECUENCIAS[p.frecuencia]?.label,
+      recargo_pct: p.interes_total > 0 ? p.recargo_pct : 0,
+      es_personalizada: esPersonalizada,
+      cuotas: p.cuotas.map((c) => ({
+        numero: c.numero,
+        vencimiento: c.vencimiento,
+        capital: c.capital,
+        interes: c.interes,
+        total: c.total,
+        es_cancelacion: esPersonalizada && conCancelacion && c.numero === p.cuotas.length,
+      })),
+    });
+    const w = window.open("", "_blank");
+    if (w) {
+      w.document.write(html);
+      w.document.close();
+    }
+  }
 
   async function guardar() {
     if (!p) return;
@@ -214,7 +328,7 @@ export default function SimuladorClient() {
           nombre: nombre.trim() || null,
           precio_contado: Number(precio),
           entrega_inicial: Number(entrega),
-          recargo_pct: Number(recargoPct) / 100,
+          recargo_pct: esPersonalizada && !planConInteres && !conRecargo ? 0 : Number(recargoPct) / 100,
           frecuencia,
           primer_vencimiento: esPersonalizada ? cuotasManualesLimpias[0]?.vencimiento ?? "" : primerVencimiento,
           cantidad_cuotas: modo === "por_cantidad" ? Number(cantidadCuotas) : null,
@@ -252,8 +366,15 @@ export default function SimuladorClient() {
     setPlanTipo(s.plan_tipo);
     if (s.plan_tipo === "personalizada" && s.cuotas_manuales && s.cuotas_manuales.length > 0) {
       setCuotasManuales(s.cuotas_manuales.map((c) => ({ vencimiento: c.vencimiento, monto: String(c.monto) })));
+      // Un plan de montos limpios suma ≤ el saldo; uno con interés suma más (lleva el interés).
+      const capital = Math.round(s.precio_contado) - Math.round(s.entrega_inicial);
+      const sumaCuotas = s.cuotas_manuales.reduce((a, c) => a + Math.round(c.monto), 0);
+      const conInteres = sumaCuotas > capital;
+      setPlanConInteres(conInteres);
       setCancelacionVenc(s.cancelacion_vencimiento ?? hoyYmd());
-      setConCancelacion(Boolean(s.cancelacion_vencimiento));
+      setConCancelacion(!conInteres && Boolean(s.cancelacion_vencimiento));
+    } else {
+      setPlanConInteres(false);
     }
     setObservacion(s.observacion ?? "");
     setNombre(s.nombre ? `${s.nombre} (copia)` : "");
@@ -310,6 +431,11 @@ export default function SimuladorClient() {
         plan_tipo: s.plan_tipo,
         cuotas_manuales: s.cuotas_manuales,
         cancelacion_vencimiento: s.cancelacion_vencimiento,
+        // Se infiere por la suma de las cuotas: un plan con interés suma más que el saldo.
+        plan_interes:
+          s.plan_tipo === "personalizada" &&
+          (s.cuotas_manuales ?? []).reduce((a, c) => a + Math.round(c.monto), 0) >
+            Math.round(s.precio_contado) - Math.round(s.entrega_inicial),
       },
     });
   }
@@ -436,6 +562,87 @@ export default function SimuladorClient() {
                 <p className="text-xs font-semibold text-slate-600">Cuotas del plan</p>
                 <span className="text-[10px] text-slate-400">Montos sin interés</span>
               </div>
+
+              <div className="mb-2 rounded-xl border border-dashed border-slate-300 bg-white p-2.5">
+                <p className="mb-1.5 text-[11px] font-semibold text-slate-600">Generar plan por cuota mensual</p>
+                <div className="flex flex-wrap items-end gap-2">
+                  <div className="min-w-[8rem] flex-1">
+                    <label className={labelClass}>Cuota mensual</label>
+                    <MontoInput value={genMonto} onChange={(n) => setGenMonto(String(n))} decimals={false} className={inputClass} />
+                  </div>
+                  <div className="flex-1">
+                    <label className={labelClass}>Primer vencimiento</label>
+                    <FechaSelect value={genDesde} onChange={(e) => setGenDesde(e.target.value)} className={inputClass} />
+                  </div>
+                </div>
+
+                <p className="mb-1 mt-2.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+                  Refuerzos (opcional)
+                </p>
+                <div className="space-y-1.5">
+                  {refuerzos.map((r, i) => (
+                    <div key={i} className="flex items-center gap-2">
+                      <div className="flex-1">
+                        <FechaSelect
+                          value={r.vencimiento}
+                          onChange={(e) =>
+                            setRefuerzos((prev) => prev.map((x, j) => (j === i ? { ...x, vencimiento: e.target.value } : x)))
+                          }
+                          className={inputClass}
+                        />
+                      </div>
+                      <div className="flex-1">
+                        <MontoInput
+                          value={r.monto}
+                          onChange={(n) => setRefuerzos((prev) => prev.map((x, j) => (j === i ? { ...x, monto: String(n) } : x)))}
+                          decimals={false}
+                          className={inputClass}
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setRefuerzos((prev) => prev.filter((_, j) => j !== i))}
+                        className="shrink-0 rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-rose-600"
+                        aria-label="Quitar refuerzo"
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+                <label className="mt-2.5 flex items-center gap-2 text-[11px] font-medium text-slate-600">
+                  <input
+                    type="checkbox"
+                    checked={genConInteres}
+                    onChange={(e) => setGenConInteres(e.target.checked)}
+                    className="h-3.5 w-3.5"
+                  />
+                  Agregar interés del {Number(recargoPct)}% anual sobre el saldo (como el plan automático)
+                </label>
+
+                <div className="mt-1.5 flex items-center justify-between">
+                  <button
+                    type="button"
+                    onClick={() => setRefuerzos((prev) => [...prev, { vencimiento: genDesde, monto: "" }])}
+                    className="text-[11px] font-semibold text-[#0EA5E9] hover:underline"
+                  >
+                    + Agregar refuerzo
+                  </button>
+                  <button
+                    type="button"
+                    onClick={generarPlanMensual}
+                    className="rounded-xl bg-slate-700 px-3.5 py-2 text-xs font-semibold text-white hover:bg-slate-800"
+                  >
+                    Generar plan
+                  </button>
+                </div>
+                <p className="mt-1 text-[10px] text-slate-400">
+                  {genConInteres
+                    ? "Con interés: cada cuota cobra el interés sobre el saldo que va bajando (como el plan automático), así que se estiran más cuotas. La cuota mensual tiene que superar el interés del primer mes."
+                    : "Sin interés (montos limpios): el sistema estira el saldo en cuotas iguales, cierra exacto y no agrega cuota de cancelación."}
+                </p>
+              </div>
+
               <div className="space-y-2">
                 {cuotasManuales.map((c, i) => (
                   <div key={i} className="flex items-center gap-2">
@@ -489,17 +696,37 @@ export default function SimuladorClient() {
                 + Agregar cuota
               </button>
 
-              <label className="mt-3 flex items-center gap-2 text-xs font-medium text-slate-600">
-                <input
-                  type="checkbox"
-                  checked={conCancelacion}
-                  onChange={(e) => setConCancelacion(e.target.checked)}
-                  className="h-3.5 w-3.5"
-                />
-                Agregar cuota final de cancelación (se lleva el saldo restante)
-              </label>
+              {planConInteres ? (
+                <p className="mt-3 rounded-xl border border-sky-200 bg-sky-50 px-3 py-2 text-[11px] text-sky-800">
+                  Plan <b>con interés</b> del {Number(recargoPct)}% anual sobre el saldo. Cada cuota ya incluye su
+                  interés y la última cierra exacto. Para volver a montos limpios, destildá «Agregar interés» y generá
+                  de nuevo.
+                </p>
+              ) : (
+                <label className="mt-3 flex items-center gap-2 text-xs font-medium text-slate-600">
+                  <input
+                    type="checkbox"
+                    checked={conCancelacion}
+                    onChange={(e) => setConCancelacion(e.target.checked)}
+                    className="h-3.5 w-3.5"
+                  />
+                  Agregar cuota final de cancelación (se lleva el saldo restante)
+                </label>
+              )}
 
-              {conCancelacion ? (
+              {!planConInteres && conCancelacion ? (
+                <label className="mt-1.5 ml-5 flex items-center gap-2 text-xs text-slate-600">
+                  <input
+                    type="checkbox"
+                    checked={conRecargo}
+                    onChange={(e) => setConRecargo(e.target.checked)}
+                    className="h-3.5 w-3.5"
+                  />
+                  Aplicar recargo del plazo (15% anual) — apagá esto para un plan de montos limpios
+                </label>
+              ) : null}
+
+              {!planConInteres && conCancelacion ? (
                 <div className="mt-2 rounded-xl border border-slate-200 bg-white p-3">
                   <div className="flex items-center justify-between gap-2">
                     <div>
@@ -531,15 +758,26 @@ export default function SimuladorClient() {
                 <span>
                   Saldo a financiar: <b className="tabular-nums text-slate-700">{gs(financiado)}</b>
                 </span>
-                <span>
-                  Suma de cuotas: <b className="tabular-nums text-slate-700">{gs(sumaManual)}</b>
-                </span>
-                {conCancelacion && recargoMonto > 0 ? (
+                {planConInteres ? (
+                  <>
+                    <span>
+                      Intereses: <b className="tabular-nums text-slate-700">{gs(p?.interes_total ?? 0)}</b>
+                    </span>
+                    <span>
+                      Total a pagar: <b className="tabular-nums text-slate-700">{gs(p?.monto_financiado ?? 0)}</b>
+                    </span>
+                  </>
+                ) : (
+                  <span>
+                    Suma de cuotas: <b className="tabular-nums text-slate-700">{gs(sumaManual)}</b>
+                  </span>
+                )}
+                {!planConInteres && conCancelacion && recargoMonto > 0 ? (
                   <span>
                     Recargo del plazo: <b className="tabular-nums text-slate-700">{gs(recargoMonto)}</b>
                   </span>
                 ) : null}
-                {conCancelacion ? (
+                {planConInteres ? null : conCancelacion ? (
                   <span>
                     Va a la cancelación:{" "}
                     <b className={`tabular-nums ${cancelacionImporte > 0 ? "text-slate-700" : "text-rose-600"}`}>
@@ -714,7 +952,9 @@ export default function SimuladorClient() {
               <div className="rounded-2xl border-2 border-[#0EA5E9] bg-sky-50/50 p-4">
                 <p className="text-3xl font-bold tabular-nums text-[#0EA5E9]">{p.cantidad_cuotas}</p>
                 {esPersonalizada ? (
-                  <p className="text-xs font-semibold text-slate-600">cuotas personalizadas (incluida la cancelación)</p>
+                  <p className="text-xs font-semibold text-slate-600">
+                    cuotas personalizadas{conCancelacion ? " (incluida la cancelación)" : ""}
+                  </p>
                 ) : (
                   <p className="text-xs font-semibold text-slate-600">
                     cuotas {FRECUENCIAS[p.frecuencia].label.toLowerCase()}es de{" "}
@@ -745,6 +985,17 @@ export default function SimuladorClient() {
                 </p>
               </div>
 
+              <div className="flex justify-end">
+                <button
+                  type="button"
+                  onClick={verPdfSimulacion}
+                  className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50"
+                >
+                  <FileDown className="h-3.5 w-3.5" />
+                  Ver / descargar PDF
+                </button>
+              </div>
+
               <div className="max-h-72 overflow-auto rounded-2xl border border-slate-200 bg-white">
                 <table className="w-full min-w-[46rem] text-xs">
                   <thead className="sticky top-0 bg-slate-50">
@@ -763,7 +1014,7 @@ export default function SimuladorClient() {
                       <tr key={c.numero}>
                         <td className="px-3 py-1.5 text-slate-600">
                           {c.numero}
-                          {esPersonalizada && c.numero === p.cuotas.length ? (
+                          {esPersonalizada && conCancelacion && c.numero === p.cuotas.length ? (
                             <span className="ml-1 rounded bg-amber-100 px-1 py-0.5 text-[9px] font-semibold text-amber-700">
                               Cancelación
                             </span>
