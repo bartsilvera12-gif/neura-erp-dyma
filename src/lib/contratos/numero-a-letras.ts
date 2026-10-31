@@ -102,6 +102,43 @@ export function guaraniesEnLetras(valor: number): string {
   return txt.charAt(0).toUpperCase() + txt.slice(1);
 }
 
+/** Nombre de la moneda tal como lo nombra el texto del contrato. */
+export function monedaNombre(moneda: string): string {
+  return moneda === "USD" ? "Dólares estadounidenses" : "Guaraníes";
+}
+
+/**
+ * Importe en cifras con el símbolo de la moneda ("Gs. 100.000" / "USD 1.500,00").
+ * En guaraníes redondea a entero; en dólares muestra los dos centavos.
+ */
+export function montoEnCifras(valor: number, moneda: string): string {
+  const num = Number(valor) || 0;
+  return moneda === "USD"
+    ? `USD ${num.toLocaleString("es-PY", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+    : `Gs. ${Math.round(num).toLocaleString("es-PY")}`;
+}
+
+/**
+ * Importe escrito en letras con el nombre de la moneda, como lo pide el contrato
+ * ("Guaraníes Cien mil" / "Dólares estadounidenses Mil quinientos con 50/100").
+ * En dólares se agregan los centavos en el formato "con XX/100" que usa la plaza.
+ */
+export function importeEnLetras(valor: number, moneda: string): string {
+  const nombre = monedaNombre(moneda);
+  if (moneda === "USD") {
+    const abs = Math.abs(Number(valor) || 0);
+    let entero = Math.floor(abs);
+    let centavos = Math.round((abs - entero) * 100);
+    // El redondeo de centavos puede llegar a 100: se arrastra al entero.
+    if (centavos === 100) {
+      entero += 1;
+      centavos = 0;
+    }
+    return `${nombre} ${guaraniesEnLetras(entero)} con ${String(centavos).padStart(2, "0")}/100`;
+  }
+  return `${nombre} ${guaraniesEnLetras(valor)}`;
+}
+
 const MESES = [
   "enero", "febrero", "marzo", "abril", "mayo", "junio",
   "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre",

@@ -79,6 +79,9 @@ export default function ModalVenderContado({
 }) {
   const [clienteId, setClienteId] = useState(lote.cliente_id ?? "");
   const [fecha, setFecha] = useState(hoyYmd());
+  // Arranca en la moneda del lote; se puede cambiar para esta venta y es la que
+  // se congela en el contrato.
+  const [moneda, setMoneda] = useState<"GS" | "USD">(lote.moneda === "USD" ? "USD" : "GS");
   const [precio, setPrecio] = useState(String(lote.precio_contado ?? 0));
   const [metodo, setMetodo] = useState("efectivo");
   const [referencia, setReferencia] = useState("");
@@ -150,6 +153,7 @@ export default function ModalVenderContado({
           fecha_venta: fecha,
           primer_vencimiento: fecha,
           precio_contado: monto,
+          moneda,
           tipo_contrato_id: tipoId || null,
           vendedor_id: vendedorId || null,
           comision_pct: vendedorId ? comision : 0,
@@ -283,6 +287,17 @@ export default function ModalVenderContado({
           ) : null}
 
           <div>
+            <label className={labelClass}>Moneda</label>
+            <FancySelect
+              value={moneda}
+              onChange={(v) => setMoneda(v === "USD" ? "USD" : "GS")}
+              options={[
+                { value: "GS", label: "Guaraníes (Gs.)" },
+                { value: "USD", label: "Dólares (USD)" },
+              ]}
+            />
+          </div>
+          <div>
             <label className={labelClass}>Fecha de la venta</label>
             <FechaSelect value={fecha} onChange={(e) => setFecha(e.target.value)} className={inputClass} />
           </div>
@@ -291,7 +306,7 @@ export default function ModalVenderContado({
             <MontoInput
               value={precio}
               onChange={(n) => setPrecio(String(n))}
-              decimals={lote.moneda === "USD"}
+              decimals={moneda === "USD"}
               onFocus={(e) => e.currentTarget.select()}
               className={inputClass}
             />
@@ -358,7 +373,7 @@ export default function ModalVenderContado({
         </div>
 
         <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2.5 text-sm text-emerald-800">
-          Cobra <strong>{fmt(monto || 0, lote.moneda)}</strong> el {fecha.split("-").reverse().join("/")} y el lote
+          Cobra <strong>{fmt(monto || 0, moneda)}</strong> el {fecha.split("-").reverse().join("/")} y el lote
           queda vendido.
         </div>
 
