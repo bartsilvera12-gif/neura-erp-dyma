@@ -22,6 +22,7 @@ export function camposLoteDesdeBody(body: Record<string, unknown>): Record<strin
   if ("padron" in body) out.padron = txt(body.padron);
   if ("matricula" in body) out.matricula = txt(body.matricula);
   if ("cuenta_corriente_catastral" in body) out.cuenta_corriente_catastral = txt(body.cuenta_corriente_catastral);
+  if ("costo_adquisicion" in body) out.costo_adquisicion = num(body.costo_adquisicion);
   if ("precio_contado" in body) out.precio_contado = num(body.precio_contado);
   if ("precio_financiado" in body) out.precio_financiado = num(body.precio_financiado);
   if ("moneda" in body) out.moneda = body.moneda === "USD" ? "USD" : "GS";

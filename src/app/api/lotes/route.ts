@@ -94,6 +94,7 @@ export async function GET(request: Request) {
       padron: (f.padron as string) ?? null,
       matricula: (f.matricula as string) ?? null,
       cuenta_corriente_catastral: (f.cuenta_corriente_catastral as string) ?? null,
+      costo_adquisicion: f.costo_adquisicion == null ? null : Number(f.costo_adquisicion),
       precio_contado: f.precio_contado == null ? null : Number(f.precio_contado),
       precio_financiado: f.precio_financiado == null ? null : Number(f.precio_financiado),
       moneda: f.moneda === "USD" ? "USD" : "GS",

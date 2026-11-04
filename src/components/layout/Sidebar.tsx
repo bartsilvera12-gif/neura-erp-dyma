@@ -23,6 +23,7 @@ import {
   Brush,
   Map as MapIcon,
   Tag,
+  Receipt,
 } from "lucide-react";
 import type { Session } from "@supabase/supabase-js";
 import { fetchWithSupabaseSession } from "@/lib/api/fetch-with-supabase-session";
@@ -100,6 +101,7 @@ const MENU_STRUCTURE: MenuItem[] = [
   { key: "planes", slug: "planes", label: "Planes", href: "/planes", icon: FileText },
   { key: "limpieza", slug: "limpieza", label: "Limpieza", href: "/limpieza", icon: Brush },
   { key: "precios", slug: "precios", label: "Consulta de precios", href: "/precios", icon: Tag },
+  { key: "gastos", slug: "gastos", label: "Gastos", href: "/gastos", icon: Receipt },
   { key: "reportes", slug: "reportes", label: "Reportes", href: "/reportes", icon: BarChart3 },
 ];
 
@@ -112,6 +114,7 @@ const MENU_FAMILIES: { id: string; titulo: string; keys: string[] }[] = [
   { id: "inicio", titulo: "Inicio", keys: ["dashboard", "gerencia"] },
   { id: "comercial", titulo: "Comercial", keys: ["lotes", "gestion-clientes", "clientes", "planes", "limpieza", "precios"] },
   { id: "cobranzas", titulo: "Cobranzas", keys: ["pagos", "cobranzas"] },
+  { id: "finanzas", titulo: "Finanzas", keys: ["gastos"] },
   { id: "reportes", titulo: "Reportes", keys: ["reportes"] },
 ];
 

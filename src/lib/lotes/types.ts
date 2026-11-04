@@ -104,6 +104,8 @@ export interface Lote {
   padron: string | null;
   matricula: string | null;
   cuenta_corriente_catastral: string | null;
+  /** Lo que le costó el lote a la empresa. Alimenta Costo en el estado de resultado. */
+  costo_adquisicion: number | null;
   precio_contado: number | null;
   precio_financiado: number | null;
   moneda: MonedaLote;

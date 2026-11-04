@@ -1,6 +1,6 @@
 "use client";
 
-import { FileText, Map as MapIcon, ReceiptText, TrendingUp } from "lucide-react";
+import { FileText, Map as MapIcon, ReceiptText, Scale, TrendingUp } from "lucide-react";
 import { SettingsModuleCard } from "@/components/config/SettingsModuleCard";
 
 export default function ReportesPage() {
@@ -42,6 +42,16 @@ export default function ReportesPage() {
               description="Movimiento completo de un cliente: facturado, cobrado y saldo acumulado, listo para imprimir."
               icon={ReceiptText}
               href="/reportes/extracto"
+              actionLabel="Ver reporte"
+            />
+          </li>
+          <li>
+            <SettingsModuleCard
+              title="Estado de resultado"
+              subtitle="FINANZAS · MENSUAL"
+              description="Ventas, costo y utilidad del período contra los gastos abiertos por cuenta, con la ganancia neta al pie. Imprimible."
+              icon={Scale}
+              href="/reportes/estado-resultado"
               actionLabel="Ver reporte"
             />
           </li>

@@ -532,6 +532,7 @@ function PanelLote({
     padron: lote.padron ?? "",
     matricula: lote.matricula ?? "",
     cuenta_corriente_catastral: lote.cuenta_corriente_catastral ?? "",
+    costo_adquisicion: lote.costo_adquisicion?.toString() ?? "",
     precio_contado: lote.precio_contado?.toString() ?? "",
     precio_financiado: lote.precio_financiado?.toString() ?? "",
     moneda: lote.moneda as MonedaLote,
@@ -754,6 +755,20 @@ function PanelLote({
           </section>
 
           <section>
+            <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-slate-500">Costo del lote</p>
+            <MontoInput
+              value={form.costo_adquisicion}
+              onChange={(n) => set("costo_adquisicion", String(n))}
+              decimals={form.moneda === "USD"}
+              className={inputClass}
+            />
+            <p className="mt-1 text-[11px] text-slate-400">
+              Lo que costó: terreno, mensura, calles, servicios. No es un precio de venta: es lo que el estado de
+              resultado descuenta para calcular la utilidad.
+            </p>
+          </section>
+
+          <section>
             <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-slate-500">Precios de lista</p>
             <div className="grid grid-cols-2 gap-3">
               <div>
@@ -863,6 +878,7 @@ function ModalNuevoLote({
   const [superficie, setSuperficie] = useState("");
   const [frente, setFrente] = useState("");
   const [fondo, setFondo] = useState("");
+  const [costo, setCosto] = useState("");
   const [contado, setContado] = useState("");
   const [financiado, setFinanciado] = useState("");
   const [moneda, setMoneda] = useState<MonedaLote>("GS");
@@ -892,6 +908,7 @@ function ModalNuevoLote({
           superficie_m2: superficie,
           frente_m: frente,
           fondo_m: fondo,
+          costo_adquisicion: costo,
           precio_contado: contado,
           precio_financiado: financiado,
           moneda,
@@ -976,6 +993,15 @@ function ModalNuevoLote({
             <div>
               <label className={labelClass}>Fondo (m)</label>
               <input type="number" value={fondo} onChange={(e) => setFondo(e.target.value)} className={inputClass} />
+            </div>
+            <div>
+              <label className={labelClass}>Costo del lote</label>
+              <MontoInput
+                value={costo}
+                onChange={(n) => setCosto(String(n))}
+                decimals={moneda === "USD"}
+                className={inputClass}
+              />
             </div>
             <div>
               <label className={labelClass}>Precio contado</label>

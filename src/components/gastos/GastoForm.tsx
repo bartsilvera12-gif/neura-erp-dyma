@@ -1,10 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { createGasto, updateGasto } from "@/lib/gastos/actions";
+import { createGasto, updateGasto, getCuentasGasto } from "@/lib/gastos/actions";
 import MontoInput from "@/components/ui/MontoInput";
-import type { Gasto, GastoInput } from "@/lib/gastos/actions";
+import { FancySelect } from "@/components/ui/FancySelect";
+import type { CuentaGasto, Gasto, GastoInput } from "@/lib/gastos/actions";
 
 const fLabel = "block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1";
 const fInput =
@@ -20,7 +21,11 @@ export default function GastoForm({ gasto, onSuccess }: Props) {
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const [cuentas, setCuentas] = useState<CuentaGasto[]>([]);
+  const [cuentasError, setCuentasError] = useState<string | null>(null);
+
   const [form, setForm] = useState<GastoInput>({
+    cuenta_id: gasto?.cuenta_id ?? "",
     categoria: gasto?.categoria ?? "",
     descripcion: gasto?.descripcion ?? "",
     monto: gasto?.monto ?? 0,
@@ -29,6 +34,22 @@ export default function GastoForm({ gasto, onSuccess }: Props) {
     frecuencia: gasto?.frecuencia ?? "",
     fecha: gasto?.fecha ?? new Date().toISOString().slice(0, 10),
   });
+
+  // El plan de cuentas se carga una vez: alimenta el selector y, de paso, el
+  // texto que se guarda en el campo viejo `categoria`.
+  useEffect(() => {
+    getCuentasGasto()
+      .then((c) => {
+        setCuentas(c);
+        setCuentasError(null);
+      })
+      .catch((e: unknown) => setCuentasError(e instanceof Error ? e.message : "No se pudo cargar el plan de cuentas"));
+  }, []);
+
+  function elegirCuenta(id: string) {
+    const c = cuentas.find((x) => x.id === id);
+    setForm((prev) => ({ ...prev, cuenta_id: id, categoria: c?.nombre ?? prev.categoria }));
+  }
 
   function handleChange(e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) {
     const { name, value, type } = e.target;
@@ -44,6 +65,9 @@ export default function GastoForm({ gasto, onSuccess }: Props) {
     e.preventDefault();
     setError(null);
 
+    if (!form.cuenta_id) {
+      return setError("Elegí la cuenta del gasto: es la que lo ubica en el estado de resultado.");
+    }
     if (form.monto <= 0) {
       return setError("El monto debe ser mayor a 0.");
     }
@@ -82,15 +106,24 @@ export default function GastoForm({ gasto, onSuccess }: Props) {
         </div>
         <div className="space-y-4">
           <div>
-            <label className={fLabel}>Categoría</label>
-            <input
-              type="text"
-              name="categoria"
-              value={form.categoria}
-              onChange={handleChange}
-              placeholder="Ej: Servicios, Alquiler, Salarios"
-              className={fInput}
+            <label className={fLabel}>Cuenta *</label>
+            <FancySelect
+              value={form.cuenta_id}
+              onChange={elegirCuenta}
+              options={[
+                { value: "", label: "Elegí una cuenta…" },
+                ...cuentas.map((c) => ({ value: c.id, label: c.nombre })),
+              ]}
             />
+            <p className="mt-1 text-xs text-slate-500">
+              Es el renglón en el que el gasto aparece en el estado de resultado.
+            </p>
+            {cuentasError ? <p className="mt-1 text-xs text-red-600">{cuentasError}</p> : null}
+            {!cuentasError && cuentas.length === 0 ? (
+              <p className="mt-1 text-xs text-amber-700">
+                Todavía no hay cuentas cargadas. Pedí que corran el plan de cuentas antes de registrar gastos.
+              </p>
+            ) : null}
           </div>
           <div>
             <label className={fLabel}>Descripción</label>
