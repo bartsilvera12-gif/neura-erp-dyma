@@ -78,6 +78,90 @@ export async function getCuentasGasto(): Promise<CuentaGasto[]> {
   }));
 }
 
+/**
+ * Crea una cuenta de gasto nueva para la empresa del usuario y la deja activa
+ * y disponible para futuros registros.
+ *
+ * El nombre se normaliza (trim + mayúsculas) para que coincida con la
+ * convención del plan de cuentas y no se dupliquen renglones del estado de
+ * resultado por diferencias de capitalización. Si ya existe una cuenta con ese
+ * nombre:
+ *   - activa: se devuelve tal cual (no se duplica).
+ *   - inactiva: se reactiva y se devuelve.
+ *
+ * El código sigue la convención de las cuentas creadas a mano: `M` + un orden
+ * libre al final del plan (p. ej. `M190`), para no chocar con los códigos del
+ * modelo que trajo el cliente.
+ */
+export async function createCuentaGasto(nombre: string): Promise<CuentaGasto> {
+  const nombreLimpio = (nombre ?? "").trim().toUpperCase();
+  if (!nombreLimpio) throw new Error("Escribí un nombre para la cuenta");
+
+  const supabase = await getBrowserSupabaseForEmpresaData();
+  const empresa_id = await getEmpresaId();
+
+  // Todas las cuentas de la empresa (activas e inactivas): el nombre y el código
+  // son únicos por empresa sin importar el estado.
+  const { data: existentesRaw, error: errExist } = await supabase
+    .from("gasto_cuentas")
+    .select("id, codigo, nombre, orden, activo")
+    .eq("empresa_id", empresa_id);
+  if (errExist) throw new Error(errExist.message);
+
+  const existentes = (existentesRaw ?? []) as Record<string, unknown>[];
+
+  // ¿Ya existe una cuenta con ese nombre (sin distinguir mayúsculas)?
+  const yaExiste = existentes.find(
+    (c) => String(c.nombre ?? "").trim().toUpperCase() === nombreLimpio,
+  );
+  if (yaExiste) {
+    if (yaExiste.activo === false) {
+      const { data, error } = await supabase
+        .from("gasto_cuentas")
+        .update({ activo: true })
+        .eq("id", String(yaExiste.id))
+        .select("id, codigo, nombre, orden, activo")
+        .single();
+      if (error) throw new Error(error.message);
+      const r = data as Record<string, unknown>;
+      return {
+        id: String(r.id),
+        codigo: String(r.codigo ?? ""),
+        nombre: String(r.nombre ?? ""),
+        orden: Number(r.orden) || 0,
+        activo: r.activo !== false,
+      };
+    }
+    throw new Error("Ya existe una cuenta con ese nombre");
+  }
+
+  // Orden y código libres al final del plan.
+  const maxOrden = existentes.reduce((m, c) => Math.max(m, Number(c.orden) || 0), 0);
+  const codigosUsados = new Set(existentes.map((c) => String(c.codigo ?? "")));
+  let orden = maxOrden + 10;
+  let codigo = `M${String(orden).padStart(3, "0")}`;
+  while (codigosUsados.has(codigo)) {
+    orden += 10;
+    codigo = `M${String(orden).padStart(3, "0")}`;
+  }
+
+  const { data, error } = await supabase
+    .from("gasto_cuentas")
+    .insert({ empresa_id, codigo, nombre: nombreLimpio, orden, activo: true })
+    .select("id, codigo, nombre, orden, activo")
+    .single();
+  if (error) throw new Error(error.message);
+
+  const r = data as Record<string, unknown>;
+  return {
+    id: String(r.id),
+    codigo: String(r.codigo ?? ""),
+    nombre: String(r.nombre ?? ""),
+    orden: Number(r.orden) || 0,
+    activo: r.activo !== false,
+  };
+}
+
 /** Obtiene todos los gastos de la empresa, ordenados por fecha desc. */
 export async function getGastos(): Promise<Gasto[]> {
   if (typeof window !== "undefined") {

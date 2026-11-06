@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { createGasto, updateGasto, getCuentasGasto } from "@/lib/gastos/actions";
+import { createGasto, updateGasto, getCuentasGasto, createCuentaGasto } from "@/lib/gastos/actions";
 import MontoInput from "@/components/ui/MontoInput";
 import { FancySelect } from "@/components/ui/FancySelect";
 import type { CuentaGasto, Gasto, GastoInput } from "@/lib/gastos/actions";
@@ -23,6 +23,12 @@ export default function GastoForm({ gasto, onSuccess }: Props) {
 
   const [cuentas, setCuentas] = useState<CuentaGasto[]>([]);
   const [cuentasError, setCuentasError] = useState<string | null>(null);
+
+  // Alta de cuenta nueva desde el propio formulario.
+  const [creandoCuenta, setCreandoCuenta] = useState(false);
+  const [nuevaCuenta, setNuevaCuenta] = useState("");
+  const [guardandoCuenta, setGuardandoCuenta] = useState(false);
+  const [cuentaError, setCuentaError] = useState<string | null>(null);
 
   const [form, setForm] = useState<GastoInput>({
     cuenta_id: gasto?.cuenta_id ?? "",
@@ -49,6 +55,34 @@ export default function GastoForm({ gasto, onSuccess }: Props) {
   function elegirCuenta(id: string) {
     const c = cuentas.find((x) => x.id === id);
     setForm((prev) => ({ ...prev, cuenta_id: id, categoria: c?.nombre ?? prev.categoria }));
+  }
+
+  async function handleCrearCuenta() {
+    const nombre = nuevaCuenta.trim();
+    if (!nombre) {
+      return setCuentaError("Escribí un nombre para la cuenta");
+    }
+    setCuentaError(null);
+    setGuardandoCuenta(true);
+    try {
+      const creada = await createCuentaGasto(nombre);
+      // La metemos en el listado respetando el orden del plan de cuentas y la
+      // dejamos seleccionada para que el usuario siga cargando el gasto.
+      setCuentas((prev) => {
+        const sinDuplicar = prev.filter((c) => c.id !== creada.id);
+        return [...sinDuplicar, creada].sort(
+          (a, b) => a.orden - b.orden || a.nombre.localeCompare(b.nombre),
+        );
+      });
+      setForm((prev) => ({ ...prev, cuenta_id: creada.id, categoria: creada.nombre }));
+      setCuentasError(null);
+      setNuevaCuenta("");
+      setCreandoCuenta(false);
+    } catch (err: unknown) {
+      setCuentaError(err instanceof Error ? err.message : "No se pudo crear la cuenta");
+    } finally {
+      setGuardandoCuenta(false);
+    }
   }
 
   function handleChange(e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) {
@@ -121,9 +155,70 @@ export default function GastoForm({ gasto, onSuccess }: Props) {
             {cuentasError ? <p className="mt-1 text-xs text-red-600">{cuentasError}</p> : null}
             {!cuentasError && cuentas.length === 0 ? (
               <p className="mt-1 text-xs text-amber-700">
-                Todavía no hay cuentas cargadas. Pedí que corran el plan de cuentas antes de registrar gastos.
+                Todavía no hay cuentas cargadas. Creá la primera con el botón de abajo.
               </p>
             ) : null}
+
+            {/* Alta de cuenta nueva cuando no está en el listado */}
+            {creandoCuenta ? (
+              <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 p-3">
+                <label className={fLabel}>Nombre de la cuenta nueva</label>
+                <div className="flex flex-col gap-2 sm:flex-row">
+                  <input
+                    type="text"
+                    value={nuevaCuenta}
+                    onChange={(e) => setNuevaCuenta(e.target.value.toUpperCase())}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        void handleCrearCuenta();
+                      }
+                    }}
+                    placeholder="Ej: ALQUILER DE OFICINA"
+                    className={fInput}
+                    autoFocus
+                  />
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => void handleCrearCuenta()}
+                      disabled={guardandoCuenta}
+                      className="whitespace-nowrap bg-[#0EA5E9] hover:bg-[#0284C7] text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {guardandoCuenta ? "Creando…" : "Crear"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setCreandoCuenta(false);
+                        setNuevaCuenta("");
+                        setCuentaError(null);
+                      }}
+                      disabled={guardandoCuenta}
+                      className="whitespace-nowrap border border-slate-200 text-sm px-4 py-2 rounded-lg hover:bg-white transition-colors"
+                    >
+                      Cancelar
+                    </button>
+                  </div>
+                </div>
+                {cuentaError ? <p className="mt-2 text-xs text-red-600">{cuentaError}</p> : null}
+                <p className="mt-2 text-xs text-slate-500">
+                  Queda guardada y disponible para los próximos gastos.
+                </p>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => {
+                  setCreandoCuenta(true);
+                  setCuentaError(null);
+                }}
+                className="mt-2 inline-flex items-center gap-1 text-xs font-semibold text-[#0EA5E9] hover:text-[#0284C7] transition-colors"
+              >
+                <span className="text-sm leading-none">＋</span>
+                ¿No encontrás la cuenta? Creá una nueva
+              </button>
+            )}
           </div>
           <div>
             <label className={fLabel}>Descripción</label>
